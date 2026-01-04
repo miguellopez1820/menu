@@ -2,48 +2,74 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Panel Admin - Dash Food</title>
+    <title>Panel de Cocina PRO - Dash Food</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<body class="bg-dark text-white p-4">
-    <h2 class="fw-bold mb-4">👨‍🍳 Pedidos en Vivo</h2>
-    <div id="lista" class="row g-3"></div>
-
     <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
+    <style>
+        body { background: #1a1a1a; color: white; font-family: sans-serif; }
+        .card-pedido { background: #2d2d2d; border: 1px solid #444; border-radius: 15px; margin-bottom: 20px; }
+        .hora-tag { font-size: 0.8rem; background: #444; padding: 2px 8px; border-radius: 5px; }
+        .historial-item { background: #333; border-left: 5px solid #28a745; margin-bottom: 5px; padding: 10px; border-radius: 5px; font-size: 0.9rem; }
+    </style>
+</head>
+<body class="p-4">
+
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-8">
+                <h2 class="fw-bold mb-4">👨‍🍳 Pedidos en Cocina</h2>
+                <div id="lista-activos" class="row"></div>
+            </div>
+
+            <div class="col-md-4">
+                <h2 class="fw-bold mb-4 text-success">📜 Historial (Hoy)</h2>
+                <div id="lista-historial"></div>
+            </div>
+        </div>
+    </div>
+
     <script>
         const ably = new Ably.Realtime('DTn3Xw.LRKcmg:kyc7qhpjvAETzWfzWTVNnLerapobqPaCivYdBVk97OA');
         const canal = ably.channels.get('pedidos-dash');
 
         canal.subscribe('nuevo', (msg) => {
             const p = msg.data;
+            const horaActual = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            
             const card = document.createElement('div');
-            card.className = 'col-md-6 col-lg-4';
+            card.className = 'col-md-6';
             card.id = `card-${p.id}`;
             card.innerHTML = `
-                <div class="card bg-secondary text-white p-3 shadow border-0">
-                    <div class="d-flex justify-content-between">
-                        <h5 class="fw-bold">${p.nombre}</h5>
-                        <span class="badge bg-warning text-dark">${p.id}</span>
+                <div class="card card-pedido p-3 shadow">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h5 class="fw-bold text-warning mb-0">${p.nombre}</h5>
+                        <span class="hora-tag">⏰ ${horaActual}</span>
                     </div>
-                    <hr>
                     <p class="mb-1"><strong>Orden:</strong> ${p.comida}</p>
-                    <p class="mb-1"><strong>Dirección:</strong> ${p.direccion}</p>
-                    <a href="${p.gps}" target="_blank" class="btn btn-outline-info btn-sm mb-3">Ver Mapa 📍</a>
+                    <p class="mb-2 text-info small"><strong>Notas/Ingredientes:</strong> ${p.direccion}</p>
+                    <hr class="my-2 border-secondary">
                     <div class="d-flex gap-2">
                         <button class="btn btn-warning w-100 fw-bold" onclick="update('${p.id}', 'cocinando')">🔥 COCINAR</button>
                         <button class="btn btn-primary w-100 fw-bold" onclick="update('${p.id}', 'camino')">🛵 ENVIAR</button>
                     </div>
-                    <button class="btn btn-success mt-2 w-100 btn-sm" onclick="finalizar('${p.id}')">ENTREGADO ✅</button>
+                    <button class="btn btn-success mt-2 w-100 btn-sm" onclick="finalizar('${p.id}', '${p.nombre}', '${p.comida}')">ENTREGADO ✅</button>
                 </div>`;
-            document.getElementById('lista').prepend(card);
+            document.getElementById('lista-activos').prepend(card);
         });
 
         function update(id, status) {
             canal.publish('status-' + id, { estado: status });
         }
 
-        function finalizar(id) {
+        function finalizar(id, nombre, comida) {
+            // Eliminar de activos
             document.getElementById(`card-${id}`).remove();
+            
+            // Agregar al historial
+            const item = document.createElement('div');
+            item.className = 'historial-item';
+            item.innerHTML = `<strong>${nombre}</strong> - ${comida} <br> <small class="text-muted">Entregado a las ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</small>`;
+            document.getElementById('lista-historial').prepend(item);
         }
     </script>
 </body>
