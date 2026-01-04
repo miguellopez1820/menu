@@ -2,107 +2,101 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Dashboard Cocina - Dash Food</title>
+    <title>Panel Cocina PRO</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
     <style>
-        body { background: #0f1111; color: #ffffff; font-family: sans-serif; }
-        .card-order { background: #1c1f20; border: 1px solid #444; border-radius: 15px; }
-        .texto-importante { color: #ffc107; font-weight: bold; }
-        .direccion-texto { color: #00d4ff; }
-        .historial-card { background: #141617; border-left: 4px solid #06C167; padding: 8px; margin-bottom: 5px; font-size: 0.8rem; }
+        body { background: #000; color: #fff; font-family: sans-serif; }
+        .card-order { background: #1a1a1a; border: 2px solid #444; border-radius: 15px; padding: 15px; }
+        .texto-amarillo { color: #ffeb3b; font-weight: bold; font-size: 1.1rem; }
+        .texto-celeste { color: #00e5ff; font-weight: bold; }
+        .historial-item { background: #111; border-left: 4px solid #4caf50; padding: 10px; margin-bottom: 5px; color: #ccc; }
     </style>
 </head>
-<body class="p-4">
-<div class="container-fluid">
-    <div class="row">
-        <div class="col-md-8">
-            <h2 class="fw-bold mb-4">👨‍🍳 Cocina <span id="badge-count" class="badge bg-danger ms-2">0</span></h2>
-            <div id="lista-pedidos" class="row g-3"></div>
-        </div>
-        <div class="col-md-4 border-start border-secondary">
-            <h4 class="fw-bold mb-4 text-success">📜 Historial del Día</h4>
-            <div id="historial" style="max-height: 85vh; overflow-y: auto;"></div>
-            <button class="btn btn-outline-danger btn-sm w-100 mt-3" onclick="borrarHistorial()">Borrar Historial</button>
+<body class="p-3">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-8">
+                <h2 class="fw-bold mb-4 text-white">👨‍🍳 COCINA <span id="badge-count" class="badge bg-danger ms-2">0</span></h2>
+                <div id="lista-pedidos" class="row g-3"></div>
+            </div>
+            <div class="col-md-4 border-start border-secondary">
+                <h4 class="text-success fw-bold">📜 VENTAS DE HOY</h4>
+                <div id="historial" style="max-height: 80vh; overflow-y: auto;"></div>
+            </div>
         </div>
     </div>
-</div>
+    <audio id="sonido-pedido" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"></audio>
+    <script>
+        const ably = new Ably.Realtime('DTn3Xw.LRKcmg:kyc7qhpjvAETzWfzWTVNnLerapobqPaCivYdBVk97OA');
+        const canal = ably.channels.get('pedidos-dash');
+        const audio = document.getElementById('sonido-pedido');
+        let contador = 0;
 
-<audio id="sonido-pedido" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"></audio>
+        // Cargar historial al iniciar
+        window.onload = () => {
+            const guardado = JSON.parse(localStorage.getItem('historialDash')) || [];
+            guardado.forEach(p => agregarAHistorialVista(p));
+        };
 
-<script>
-    const ably = new Ably.Realtime('DTn3Xw.LRKcmg:kyc7qhpjvAETzWfzWTVNnLerapobqPaCivYdBVk97OA');
-    const canal = ably.channels.get('pedidos-dash');
-    const audio = document.getElementById('sonido-pedido');
+        canal.subscribe('nuevo', (msg) => {
+            const p = msg.data;
+            audio.play().catch(e => {});
+            contador++;
+            document.getElementById('badge-count').innerText = contador;
 
-    // Cargar historial guardado al abrir la página
-    window.onload = () => {
-        const guardado = JSON.parse(localStorage.getItem('historialDash')) || [];
-        guardado.forEach(p => agregarAHistorialVista(p));
-    };
+            const card = document.createElement('div');
+            card.className = 'col-md-6'; card.id = `order-${p.id}`;
+            card.innerHTML = `
+                <div class="card card-order shadow-lg">
+                    <h4 class="texto-amarillo">${p.nombre}</h4>
+                    <p class="mb-1 text-white fs-5">🍔 <b>Orden:</b> ${p.comida}</p>
+                    <div class="bg-dark p-2 rounded mb-2 border border-secondary">
+                        <span class="text-danger fw-bold">📝 NOTAS:</span><br>
+                        <span class="text-white fw-bold">${p.notas || "SIN CAMBIOS"}</span>
+                    </div>
+                    <div class="mb-3">
+                        <span class="text-muted">🏠 DIRECCIÓN:</span><br>
+                        <span class="texto-celeste fs-6">${p.direccion}</span>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-warning btn-lg w-100 fw-bold" onclick="status('${p.id}', 'cocinando')">🔥 COCINAR</button>
+                        <button class="btn btn-primary btn-lg w-100 fw-bold" onclick="enviarReparto('${p.id}', '${encodeURIComponent(JSON.stringify(p))}')">🛵 ENVIAR</button>
+                    </div>
+                </div>`;
+            document.getElementById('lista-pedidos').prepend(card);
+        });
 
-    canal.subscribe('nuevo', (msg) => {
-        const p = msg.data;
-        audio.play().catch(e => {});
-        renderizarPedido(p);
-    });
-
-    function renderizarPedido(p) {
-        const hora = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        const card = document.createElement('div');
-        card.className = 'col-md-6'; card.id = `order-${p.id}`;
-        card.innerHTML = `
-            <div class="card card-order p-3 shadow">
-                <h5 class="text-warning fw-bold">${p.nombre} <small class="text-white float-end" style="font-size:10px">ID: ${p.id}</small></h5>
-                <p class="mb-1 text-white"><strong>Orden:</strong> ${p.comida}</p>
-                <div class="bg-dark p-2 rounded mb-2" style="border: 1px solid #555;">
-                    <span class="texto-importante small">Notas:</span><br><span class="small">${p.notas || "Ninguna"}</span>
-                </div>
-                <div class="mb-3 small">
-                    <span class="text-muted">📍 Dirección:</span><br><span class="direccion-texto">${p.direccion}</span>
-                </div>
-                <div class="d-flex gap-2">
-                    <button class="btn btn-warning btn-sm w-100 fw-bold" onclick="update('${p.id}', 'cocinando')">🔥 COCINAR</button>
-                    <button class="btn btn-primary btn-sm w-100 fw-bold" onclick="update('${p.id}', 'camino', '${encodeURIComponent(JSON.stringify(p))}')">🛵 ENVIAR</button>
-                </div>
-                <button class="btn btn-outline-success btn-sm mt-3 w-100" onclick="finalizar('${p.id}', '${p.nombre}', '${p.comida}')">ENTREGADO ✅</button>
-            </div>`;
-        document.getElementById('lista-pedidos').prepend(card);
-    }
-
-    function update(id, status, pData) {
-        canal.publish('status-' + id, { estado: status });
-        if(status === 'camino') {
-            // Mandamos el pedido completo al canal de repartidores
-            canal.publish('reparto-nuevo', JSON.parse(decodeURIComponent(pData)));
+        function status(id, estado) {
+            canal.publish('status-' + id, { estado: estado });
         }
-    }
 
-    function finalizar(id, nombre, comida) {
-        document.getElementById(`order-${id}`).remove();
-        const pFinal = { nombre, comida, hora: new Date().toLocaleTimeString() };
-        
-        // Guardar en LocalStorage
-        const historial = JSON.parse(localStorage.getItem('historialDash')) || [];
-        historial.unshift(pFinal);
-        localStorage.setItem('historialDash', JSON.stringify(historial));
-        
-        agregarAHistorialVista(pFinal);
-    }
-
-    function agregarAHistorialVista(p) {
-        const hist = document.createElement('div');
-        hist.className = 'historial-card';
-        hist.innerHTML = `<strong>${p.nombre}</strong> - ${p.comida} <br><small class="text-muted">${p.hora}</small>`;
-        document.getElementById('historial').prepend(hist);
-    }
-
-    function borrarHistorial() {
-        if(confirm("¿Borrar historial de hoy?")) {
-            localStorage.removeItem('historialDash');
-            location.reload();
+        function enviarReparto(id, pData) {
+            const pedido = JSON.parse(decodeURIComponent(pData));
+            // SEÑAL AL CLIENTE
+            canal.publish('status-' + id, { estado: 'camino' });
+            // SEÑAL AL REPARTIDOR (Esta es la que estaba fallando)
+            canal.publish('a-repartir', pedido);
+            // QUITAMOS DE COCINA Y MANDAMOS A HISTORIAL
+            document.getElementById(`order-${id}`).remove();
+            finalizar(pedido);
         }
-    }
-</script>
+
+        function finalizar(p) {
+            contador--; document.getElementById('badge-count').innerText = contador;
+            const pFinal = { nombre: p.nombre, comida: p.comida, hora: new Date().toLocaleTimeString() };
+            const historial = JSON.parse(localStorage.getItem('historialDash')) || [];
+            historial.unshift(pFinal);
+            localStorage.setItem('historialDash', JSON.stringify(historial));
+            agregarAHistorialVista(pFinal);
+        }
+
+        function agregarAHistorialVista(p) {
+            const hist = document.createElement('div');
+            hist.className = 'historial-item';
+            hist.innerHTML = `<b>${p.nombre}</b> - ${p.comida} <br><small>${p.hora}</small>`;
+            document.getElementById('historial').prepend(hist);
+        }
+    </script>
 </body>
 </html>
