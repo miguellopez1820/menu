@@ -10,18 +10,16 @@
         :root { --uber-green: #06C167; }
         body { background: #f7f7f7; font-family: 'Segoe UI', sans-serif; color: #333; }
         .app-card { border-radius: 20px; border: none; box-shadow: 0 4px 15px rgba(0,0,0,0.1); background: white; }
-        .btn-order { background: #000; color: #fff; border-radius: 12px; padding: 15px; width: 100%; font-weight: bold; border: none; transition: 0.3s; }
-        .btn-order:active { transform: scale(0.98); background: #222; }
+        .btn-order { background: #000; color: #fff; border-radius: 12px; padding: 18px; width: 100%; font-weight: bold; border: none; transition: 0.3s; font-size: 1.1rem; }
+        .btn-order:disabled { background: #555; }
         
-        /* Estilos de Seguimiento (Tracking) */
+        /* Seguimiento de Pasos */
         .step { position: relative; padding-left: 50px; margin-bottom: 40px; color: #ccc; transition: 0.4s; }
         .step::before { content: ""; position: absolute; left: 18px; top: 0; bottom: -40px; width: 2px; background: #eee; }
         .step:last-child::before { display: none; }
         .step-icon { position: absolute; left: 0; width: 38px; height: 38px; background: #eee; border-radius: 50%; display: flex; align-items: center; justify-content: center; z-index: 1; transition: 0.4s; }
         .active { color: #000; font-weight: bold; }
         .active .step-icon { background: var(--uber-green); color: white; }
-        
-        .nota-gps { font-size: 0.75rem; color: #666; margin-top: 10px; text-align: center; }
     </style>
 </head>
 <body>
@@ -29,17 +27,17 @@
 <div id="pantalla-pedido" class="container py-4">
     <header class="text-center mb-4">
         <h2 class="fw-bold">Dash Food 🍔</h2>
-        <p class="text-muted">Pide tu comida favorita en segundos</p>
+        <p class="text-muted">Tu comida favorita a un clic</p>
     </header>
 
     <div class="card app-card p-4 shadow mb-4">
         <div class="mb-3">
             <label class="fw-bold small mb-1">Tu Nombre:</label>
-            <input type="text" id="nombre" class="form-control" placeholder="Ej: Miguel López">
+            <input type="text" id="nombre" class="form-control" placeholder="¿A nombre de quién?">
         </div>
         
         <div class="mb-3">
-            <label class="fw-bold small mb-1">¿Qué vas a comer?:</label>
+            <label class="fw-bold small mb-1">Selecciona tu Orden:</label>
             <select id="comida" class="form-select">
                 <option value="Hamburguesa Especial - $120">Hamburguesa Especial - $120</option>
                 <option value="Pizza Pepperoni - $150">Pizza Pepperoni - $150</option>
@@ -53,56 +51,66 @@
         </div>
 
         <div class="mb-4">
-            <label class="fw-bold small mb-1">Dirección de Entrega:</label>
-            <textarea id="direccion" class="form-control" rows="2" placeholder="Calle, número, colonia y referencias"></textarea>
+            <label class="fw-bold small mb-1">Dirección Escrita:</label>
+            <textarea id="direccion" class="form-control" rows="2" placeholder="Calle, número y colonia"></textarea>
         </div>
         
-        <button onclick="enviarPedido()" class="btn-order shadow">CONFIRMAR PEDIDO</button>
-        <p class="nota-gps">Al pedir, se enviará tu ubicación para el repartidor 📍</p>
+        <button onclick="enviarPedido()" class="btn-order shadow">CONFIRMAR PEDIDO 📍</button>
+        <p class="text-center small text-muted mt-3">Necesitamos tu GPS para que el repartidor llegue más rápido.</p>
     </div>
 </div>
 
 <div id="pantalla-tracking" class="container py-5 d-none">
     <div class="card app-card p-4 text-center shadow-lg">
-        <h4 class="fw-bold mb-5">Sigue tu pedido en vivo 🛵</h4>
+        <h4 class="fw-bold mb-5">Estado de tu pedido 🛵</h4>
         <div class="text-start ms-2">
             <div id="step1" class="step active"><div class="step-icon">📩</div>Pedido Recibido</div>
             <div id="step2" class="step"><div class="step-icon">🔥</div>Preparando en Cocina</div>
-            <div id="step3" class="step"><div class="step-icon">🛵</div>El repartidor va en camino</div>
+            <div id="step3" class="step"><div class="step-icon">🛵</div>Repartidor en Camino</div>
         </div>
-        <hr>
-        <p class="small text-muted">Te avisaremos cuando el repartidor esté cerca.</p>
     </div>
 </div>
 
 <script>
-    // Configuración de Ably con tu API KEY
     const ably = new Ably.Realtime('DTn3Xw.LRKcmg:kyc7qhpjvAETzWfzWTVNnLerapobqPaCivYdBVk97OA');
     const canal = ably.channels.get('pedidos-dash');
-    
     let idPedido = "P-" + Math.floor(Math.random() * 10000);
-    let gpsLink = "Ubicación no proporcionada";
-
-    // Captura de GPS corregida (Sin errores 404)
-    navigator.geolocation.getCurrentPosition(
-        (p) => { 
-            gpsLink = `https://www.google.com/maps?q=${p.coords.latitude},${p.coords.longitude}`; 
-        },
-        (e) => { 
-            console.log("GPS no permitido"); 
-        },
-        { enableHighAccuracy: true }
-    );
 
     function enviarPedido() {
         const nombre = document.getElementById('nombre').value;
         const direccion = document.getElementById('direccion').value;
         
         if(!nombre || !direccion) {
-            alert("Bro, llena tu nombre y dirección para poder llegar.");
+            alert("Por favor, ingresa tu nombre y dirección.");
             return;
         }
 
+        const btn = document.querySelector('.btn-order');
+        btn.innerText = "LOCALIZANDO GPS... 🕒";
+        btn.disabled = true;
+
+        // AQUÍ SE PIDE LA UBICACIÓN AL HACER CLIC
+        if ("geolocation" in navigator) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    // Formato de link corregido para evitar 404
+                    const lat = position.coords.latitude;
+                    const lon = position.coords.longitude;
+                    const gpsLink = `https://www.google.com/maps?q=${lat},${lon}`;
+                    procesarEnvio(nombre, direccion, gpsLink);
+                },
+                (error) => {
+                    alert("No pudimos obtener tu GPS. El pedido se enviará solo con la dirección escrita.");
+                    procesarEnvio(nombre, direccion, "GPS no proporcionado");
+                },
+                { enableHighAccuracy: true, timeout: 8000 }
+            );
+        } else {
+            procesarEnvio(nombre, direccion, "Navegador no soporta GPS");
+        }
+    }
+
+    function procesarEnvio(nombre, direccion, gpsLink) {
         const datos = {
             id: idPedido,
             nombre: nombre,
@@ -112,18 +120,13 @@
             gps: gpsLink
         };
 
-        // Enviar pedido a la Cocina (Admin)
         canal.publish('nuevo', datos);
 
-        // Cambiar a pantalla de seguimiento
         document.getElementById('pantalla-pedido').classList.add('d-none');
         document.getElementById('pantalla-tracking').classList.remove('d-none');
 
-        // Escuchar cambios de estado desde la cocina
         canal.subscribe('status-' + idPedido, (msg) => {
-            if(msg.data.estado === 'cocinando') {
-                document.getElementById('step2').classList.add('active');
-            }
+            if(msg.data.estado === 'cocinando') document.getElementById('step2').classList.add('active');
             if(msg.data.estado === 'camino') {
                 document.getElementById('step2').classList.add('active');
                 document.getElementById('step3').classList.add('active');
