@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dash Food - Tracking</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        :root { --uber-green: #06C167; --uber-black: #000000; }
+        body { background: #f3f3f3; font-family: 'Uber Move', sans-serif; }
+        
+        /* Diseño de la App */
+        .app-card { border-radius: 20px; border: none; box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
+        .btn-order { background: var(--uber-black); color: white; border-radius: 12px; padding: 15px; font-weight: bold; width: 100%; border: none; }
+        
+        /* Seguimiento de Pedido (Tracking) */
+        .step { position: relative; padding-left: 45px; margin-bottom: 30px; }
+        .step::before { content: ""; position: absolute; left: 15px; top: 0; bottom: -30px; width: 2px; background: #ddd; }
+        .step:last-child::before { display: none; }
+        .step-icon { position: absolute; left: 0; width: 32px; height: 32px; background: #eee; border-radius: 50%; display: flex; align-items: center; justify-content: center; z-index: 1; }
+        .active .step-icon { background: var(--uber-green); color: white; }
+        .active .step-text { font-weight: bold; color: var(--uber-black); }
+    </style>
+</head>
+<body>
+
+<div id="pantalla-menu" class="container py-4">
+    <header class="mb-4">
+        <h1 class="fw-bold">Dash Food 🍔</h1>
+        <p class="text-muted">Directo a tu puerta</p>
+    </header>
+
+    <div class="card app-card p-3 mb-4">
+        <h6 class="fw-bold mb-3">Tu selección:</h6>
+        <div class="d-flex align-items-center mb-3 p-2 bg-light rounded" onclick="selectFood('Burger Pro $120')">
+            <img src="https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=100" class="rounded me-3" width="60">
+            <div><h6 class="mb-0">Burger Pro</h6><small>$120</small></div>
+        </div>
+        <input type="text" id="pedido-final" class="form-control mb-2" readonly placeholder="Toca un producto">
+    </div>
+
+    <div class="card app-card p-4 shadow">
+        <h6 class="fw-bold">Datos de Entrega</h6>
+        <input type="text" id="nombre" class="form-control mb-2" placeholder="Nombre">
+        <textarea id="direccion" class="form-control mb-3" placeholder="Dirección exacta"></textarea>
+        <button onclick="realizarPedido()" class="btn-order">PEDIR AHORA</button>
+    </div>
+</div>
+
+<div id="pantalla-tracking" class="container py-5 d-none text-center">
+    <div class="card app-card p-4 shadow mx-auto" style="max-width: 400px;">
+        <h4 class="fw-bold mb-4">Estado de tu pedido</h4>
+        
+        <div class="text-start ms-4">
+            <div class="step active" id="step1">
+                <div class="step-icon">📦</div>
+                <div class="step-text">Pedido Recibido</div>
+            </div>
+            <div class="step" id="step2">
+                <div class="step-icon">🔥</div>
+                <div class="step-text">Preparando en Cocina</div>
+            </div>
+            <div class="step" id="step3">
+                <div class="step-icon">🛵</div>
+                <div class="step-text">El repartidor va en camino</div>
+            </div>
+        </div>
+        
+        <p class="text-muted small mt-4">No cierres esta ventana para ver actualizaciones.</p>
+    </div>
+</div>
+
+<script>
+    function selectFood(item) {
+        document.getElementById('pedido-final').value = item;
+    }
+
+    function realizarPedido() {
+        const nombre = document.getElementById('nombre').value;
+        if(!nombre) return alert("Pon tu nombre, bro");
+
+        // AQUÍ IRÍA LA FUNCIÓN QUE MANDA A TRELLO (EmailJS)
+        // ... (Tu código anterior de EmailJS) ...
+
+        // Cambiamos de pantalla al estilo Uber Eats
+        document.getElementById('pantalla-menu').classList.add('d-none');
+        document.getElementById('pantalla-tracking').classList.remove('d-none');
+
+        // SIMULACIÓN: Vamos activando los pasos
+        setTimeout(() => document.getElementById('step2').classList.add('active'), 3000);
+        setTimeout(() => document.getElementById('step3').classList.add('active'), 6000);
+    }
+</script>
+
+</body>
+</html>
