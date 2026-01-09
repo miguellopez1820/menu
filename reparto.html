@@ -7,49 +7,49 @@
 </head>
 <body class="bg-dark text-white p-3">
     <div id="login" class="text-center py-5">
-        <h2 class="fw-bold mb-4">¿Quién entrega?</h2>
+        <h2 class="mb-4">Identificarse</h2>
         <button class="btn btn-outline-success btn-lg w-100 mb-3" onclick="entrar('Juan')">JUAN 🛵</button>
         <button class="btn btn-outline-success btn-lg w-100" onclick="entrar('Pedro')">PEDRO 🛵</button>
     </div>
-
-    <div id="app" class="d-none">
-        <h4 id="user-display" class="text-success mb-4"></h4>
-        <div id="lista-pedidos"></div>
-    </div>
+    <div id="app" class="d-none"><div id="lista-tareas"></div></div>
 
     <script>
         const ably = new Ably.Realtime('DTn3Xw.LRKcmg:kyc7qhpjvAETzWfzWTVNnLerapobqPaCivYdBVk97OA');
         const canal = ably.channels.get('pedidos-dash');
+        let misPedidos = JSON.parse(localStorage.getItem('mis_pedidos')) || [];
+        let miNombre = "";
 
-        function entrar(nom) {
+        function entrar(n) {
+            miNombre = n;
             document.getElementById('login').classList.add('d-none');
             document.getElementById('app').classList.remove('d-none');
-            document.getElementById('user-display').innerText = "En línea: " + nom;
+            misPedidos.filter(x => x.repartidor == miNombre).forEach(p => dibujar(p));
 
-            // Refrescar suscripción
-            canal.unsubscribe('asignado-' + nom);
-            canal.subscribe('asignado-' + nom, (msg) => {
-                const p = msg.data;
-                if(document.getElementById(`j-${p.id}`)) return;
-
-                const div = document.createElement('div');
-                div.id = `j-${p.id}`;
-                div.className = "card p-3 mb-3 text-dark shadow";
-                div.innerHTML = `
-                    <h5>Folio #${p.folio} - $${p.total}</h5>
-                    <p class="small">${p.direccion}</p>
-                    <a href="${p.gps}" target="_blank" class="btn btn-primary w-100 mb-2">ABRIR GPS</a>
-                    <button class="btn btn-success w-100" onclick="completar('${p.id}', '${encodeURIComponent(JSON.stringify(p))}')">ENTREGADO ✅</button>
-                `;
-                document.getElementById('lista-pedidos').prepend(div);
+            canal.subscribe('asignado-' + n, (m) => {
+                const p = m.data;
+                if(misPedidos.find(x => x.id == p.id)) return;
+                misPedidos.push(p);
+                localStorage.setItem('mis_pedidos', JSON.stringify(misPedidos));
+                dibujar(p);
             });
         }
 
-        function completar(id, data) {
-            const p = JSON.parse(decodeURIComponent(data));
+        function dibujar(p) {
+            const div = document.createElement('div'); div.id = `j-${p.id}`;
+            div.className = "card p-3 mb-3 text-dark";
+            div.innerHTML = `<h5>Folio #${p.folio}</h5><p>${p.comida}<br>${p.direccion}</p>
+                <a href="${p.gps}" target="_blank" class="btn btn-primary w-100 mb-2">GPS</a>
+                <button class="btn btn-success w-100" onclick="listo('${p.id}')">ENTREGADO ✅</button>`;
+            document.getElementById('lista-tareas').prepend(div);
+        }
+
+        function listo(id) {
+            const p = misPedidos.find(x => x.id == id);
             canal.publish('para-gerente', p);
             canal.publish('status-' + id, { estado: 'entregado' });
-            document.getElementById(`j-${id}`).remove();
+            misPedidos = misPedidos.filter(x => x.id != id);
+            localStorage.setItem('mis_pedidos', JSON.stringify(misPedidos));
+            document.getElementById('j-'+id).remove();
         }
     </script>
 </body>
