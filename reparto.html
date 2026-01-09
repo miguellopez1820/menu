@@ -4,46 +4,48 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
-    <style>
-        body { background: #1a1a1a; color: white; }
-        .job-card { background: #2d2d2d; border-radius: 20px; padding: 20px; margin-bottom: 20px; border: 1px solid #444; }
-    </style>
 </head>
-<body class="p-3">
-    <div id="login">
-        <h2 class="text-center py-5">Identificación</h2>
-        <button class="btn btn-outline-success btn-lg w-100 mb-3" onclick="start('Juan')">JUAN</button>
-        <button class="btn btn-outline-success btn-lg w-100" onclick="start('Pedro')">PEDRO</button>
+<body class="bg-dark text-white p-3">
+    <div id="login" class="text-center py-5">
+        <h2 class="fw-bold mb-4">¿Quién entrega?</h2>
+        <button class="btn btn-outline-success btn-lg w-100 mb-3" onclick="entrar('Juan')">JUAN 🛵</button>
+        <button class="btn btn-outline-success btn-lg w-100" onclick="entrar('Pedro')">PEDRO 🛵</button>
     </div>
 
     <div id="app" class="d-none">
-        <h3 id="nom-repa" class="text-success fw-bold"></h3>
-        <div id="lista-tareas"></div>
+        <h4 id="user-display" class="text-success mb-4"></h4>
+        <div id="lista-pedidos"></div>
     </div>
 
     <script>
         const ably = new Ably.Realtime('DTn3Xw.LRKcmg:kyc7qhpjvAETzWfzWTVNnLerapobqPaCivYdBVk97OA');
         const canal = ably.channels.get('pedidos-dash');
 
-        function start(nombre) {
+        function entrar(nom) {
             document.getElementById('login').classList.add('d-none');
             document.getElementById('app').classList.remove('d-none');
-            document.getElementById('nom-repa').innerText = "Repartidor: " + nombre;
+            document.getElementById('user-display').innerText = "En línea: " + nom;
 
-            canal.subscribe('asignado-' + nombre, (m) => {
-                const p = m.data;
+            // Refrescar suscripción
+            canal.unsubscribe('asignado-' + nom);
+            canal.subscribe('asignado-' + nom, (msg) => {
+                const p = msg.data;
+                if(document.getElementById(`j-${p.id}`)) return;
+
                 const div = document.createElement('div');
-                div.className = "job-card"; div.id = `j-${p.id}`;
+                div.id = `j-${p.id}`;
+                div.className = "card p-3 mb-3 text-dark shadow";
                 div.innerHTML = `
-                    <h4>Folio #${p.folio}</h4>
-                    <p><b>Cliente:</b> ${p.nombre}<br><b>Monto:</b> $${p.total}</p>
-                    <a href="${p.gps}" target="_blank" class="btn btn-info w-100 mb-2">GPS</a>
-                    <button class="btn btn-success w-100" onclick="finalizar('${p.id}', '${encodeURIComponent(JSON.stringify(p))}')">ENTREGADO ✅</button>`;
-                document.getElementById('lista-tareas').prepend(div);
+                    <h5>Folio #${p.folio} - $${p.total}</h5>
+                    <p class="small">${p.direccion}</p>
+                    <a href="${p.gps}" target="_blank" class="btn btn-primary w-100 mb-2">ABRIR GPS</a>
+                    <button class="btn btn-success w-100" onclick="completar('${p.id}', '${encodeURIComponent(JSON.stringify(p))}')">ENTREGADO ✅</button>
+                `;
+                document.getElementById('lista-pedidos').prepend(div);
             });
         }
 
-        function finalizar(id, data) {
+        function completar(id, data) {
             const p = JSON.parse(decodeURIComponent(data));
             canal.publish('para-gerente', p);
             canal.publish('status-' + id, { estado: 'entregado' });
