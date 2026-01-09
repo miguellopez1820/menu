@@ -1,35 +1,120 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
+    <meta charset="UTF-8">
+    <title>Gerente - Corte de Caja</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
+    <style>
+        body { background: #f4f7f6; font-family: 'Segoe UI', sans-serif; }
+        .repa-card { background: white; border-radius: 15px; border-top: 5px solid #198754; padding: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+        .monto { font-size: 1.8rem; font-weight: bold; color: #198754; }
+        .total-global { background: #000; color: #fff; padding: 25px; border-radius: 20px; margin-bottom: 30px; }
+    </style>
 </head>
-<body class="p-4 bg-light">
-    <h2 class="fw-bold">Corte de Caja</h2>
-    <div id="repartidores" class="row mb-4"></div>
-    <table class="table bg-white rounded shadow-sm">
-        <thead><tr><th>Hora</th><th>Repartidor</th><th>Monto</th></tr></thead>
-        <tbody id="historial"></tbody>
-    </table>
+<body class="p-4">
+    <div class="container">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2 class="fw-bold m-0">📊 Corte de Caja Permanente</h2>
+            <button class="btn btn-danger btn-sm" onclick="resetCaja()">REINICIAR TODO EL DÍA</button>
+        </div>
+
+        <div class="total-global text-center shadow-lg">
+            <span class="text-white-50 small fw-bold">VENTA TOTAL ACUMULADA</span>
+            <div class="display-3 fw-bold" id="venta-total">$0.00</div>
+        </div>
+
+        <div class="row mb-5">
+            <div class="col-md-5">
+                <h4 class="fw-bold mb-3">🛵 Por Repartidor</h4>
+                <div id="repartidores-grid">
+                    </div>
+            </div>
+
+            <div class="col-md-7">
+                <div class="card p-4 border-0 shadow-sm rounded-4">
+                    <h4 class="fw-bold mb-3">📜 Historial del Día</h4>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle">
+                            <thead class="table-light">
+                                <tr><th>Hora</th><th>Repartidor</th><th>Monto</th></tr>
+                            </thead>
+                            <tbody id="historial-ventas">
+                                </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script>
         const ably = new Ably.Realtime('DTn3Xw.LRKcmg:kyc7qhpjvAETzWfzWTVNnLerapobqPaCivYdBVk97OA');
         const canal = ably.channels.get('pedidos-dash');
-        let saldos = {};
+
+        // --- RECUPERAR DATOS AL CARGAR ---
+        let globalTotal = parseFloat(localStorage.getItem('g_total')) || 0;
+        let repartidoresData = JSON.parse(localStorage.getItem('g_repas')) || {};
+        let historialHTML = localStorage.getItem('g_historial') || "";
+
+        // Inicializar vista
+        actualizarVista();
 
         canal.subscribe('para-gerente', (msg) => {
             const p = msg.data;
-            const repa = p.repartidor;
-            saldos[repa] = (saldos[repa] || 0) + p.total;
-            
-            // Dibujar saldos
-            let html = "";
-            for(let r in saldos) html += `<div class="col-md-3"><div class="card p-3"><b>${r}</b><br><span class="h4 text-success">$${saldos[r]}</span></div></div>`;
-            document.getElementById('repartidores').innerHTML = html;
+            const repa = p.repartidor || "Sin Nombre";
+            const monto = Number(p.total) || 0;
+            const hora = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
 
-            const fila = `<tr><td>${new Date().toLocaleTimeString()}</td><td>${repa}</td><td>$${p.total}</td></tr>`;
-            document.getElementById('historial').innerHTML = fila + document.getElementById('historial').innerHTML;
+            // 1. Sumar al Total Global
+            globalTotal += monto;
+            localStorage.setItem('g_total', globalTotal);
+
+            // 2. Sumar al repartidor específico
+            if(!repartidoresData[repa]) repartidoresData[repa] = 0;
+            repartidoresData[repa] += monto;
+            localStorage.setItem('g_repas', JSON.stringify(repartidoresData));
+
+            // 3. Agregar al historial
+            const nuevaFila = `<tr>
+                <td><span class="badge bg-light text-dark border">${hora}</span></td>
+                <td><b class="text-primary">${repa}</b></td>
+                <td class="fw-bold text-success">$${monto}.00</td>
+            </tr>`;
+            historialHTML = nuevaFila + historialHTML;
+            localStorage.setItem('g_historial', historialHTML);
+
+            actualizarVista();
         });
+
+        function actualizarVista() {
+            // Actualizar número grande
+            document.getElementById('venta-total').innerText = `$${globalTotal.toLocaleString()}.00`;
+            
+            // Actualizar tabla
+            document.getElementById('historial-ventas').innerHTML = historialHTML;
+
+            // Actualizar tarjetas de repartidores
+            const grid = document.getElementById('repartidores-grid');
+            grid.innerHTML = "";
+            for (let nombre in repartidoresData) {
+                const div = document.createElement('div');
+                div.className = 'repa-card d-flex justify-content-between align-items-center mb-3';
+                div.innerHTML = `
+                    <div><span class="text-muted small fw-bold">REPARTIDOR</span><br><b class="text-uppercase">${nombre}</b></div>
+                    <div class="monto">$${repartidoresData[nombre]}.00</div>`;
+                grid.appendChild(div);
+            }
+        }
+
+        function resetCaja() {
+            if(confirm("¿Quieres borrar todas las ventas y cuentas del día? Esta acción no se puede deshacer.")) {
+                localStorage.removeItem('g_total');
+                localStorage.removeItem('g_repas');
+                localStorage.removeItem('g_historial');
+                location.reload();
+            }
+        }
     </script>
 </body>
 </html>
