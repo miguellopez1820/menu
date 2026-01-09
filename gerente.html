@@ -2,38 +2,38 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>GERENTE - Corte de Caja</title>
+    <title>Gerente - Dash Food</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
     <style>
-        body { background: #f0f2f5; font-family: sans-serif; }
-        .card-repartidor { background: white; border-radius: 12px; padding: 15px; margin-bottom: 10px; border-left: 5px solid #198754; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-        .monto-repa { font-size: 1.5rem; font-weight: bold; color: #198754; }
+        body { background: #f4f7f6; font-family: sans-serif; }
+        .repa-card { background: white; border-radius: 15px; border-top: 5px solid #0d6efd; padding: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+        .monto { font-size: 2rem; font-weight: bold; color: #198754; }
+        .total-global { background: #000; color: #fff; padding: 20px; border-radius: 15px; }
     </style>
 </head>
 <body class="p-4">
     <div class="container">
         <div class="d-flex justify-content-between align-items-center mb-4">
-            <h2 class="fw-bold">💰 Corte de Caja en Vivo</h2>
-            <button class="btn btn-danger" onclick="borrarTodo()">CERRAR DÍA / REINICIAR</button>
+            <h2 class="fw-bold">📊 Corte de Caja por Repartidor</h2>
+            <button class="btn btn-dark" onclick="location.reload()">REINICIAR CORTE</button>
         </div>
 
-        <div class="row">
-            <div class="col-md-5">
-                <h4 class="fw-bold">🛵 Cuentas por Repartidor</h4>
-                <div id="lista-repartidores">
-                    <p class="text-muted">No hay entregas confirmadas aún.</p>
-                </div>
+        <div class="total-global text-center mb-5">
+            <span class="text-white-50 small uppercase">VENTA TOTAL DEL DÍA</span>
+            <div class="display-3 fw-bold" id="venta-total">$0.00</div>
+        </div>
+
+        <div id="repartidores-grid" class="row g-4 mb-5">
             </div>
 
-            <div class="col-md-7">
-                <div class="card p-4 border-0 shadow-sm">
-                    <h4 class="fw-bold mb-3">📜 Últimas Entregas</h4>
-                    <table class="table">
-                        <thead><tr><th>Hora</th><th>Repartidor</th><th>Pedido</th><th>Total</th></tr></thead>
-                        <tbody id="tabla-ventas"></tbody>
-                    </table>
-                </div>
+        <div class="card p-4 border-0 shadow-sm">
+            <h4 class="fw-bold mb-3">📜 Historial de Entregas Realizadas</h4>
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead><tr><th>Hora</th><th>Repartidor</th><th>Pedido</th><th>Monto</th></tr></thead>
+                    <tbody id="historial-ventas"></tbody>
+                </table>
             </div>
         </div>
     </div>
@@ -41,48 +41,50 @@
     <script>
         const ably = new Ably.Realtime('DTn3Xw.LRKcmg:kyc7qhpjvAETzWfzWTVNnLerapobqPaCivYdBVk97OA');
         const canal = ably.channels.get('pedidos-dash');
-        let cuentasRepartidores = {};
+        
+        let globalTotal = 0;
+        let repartidoresData = {}; // Guardaremos { "Juan": 500, "Pedro": 300 }
 
         canal.subscribe('para-gerente', (msg) => {
             const p = msg.data;
-            const hora = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+            const repa = p.repartidor || "Sin Nombre";
             const monto = Number(p.total) || 0;
-            const repa = p.repartidor || "Desconocido";
+            const hora = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
 
-            // Actualizar cuenta individual del repartidor
-            if(!cuentasRepartidores[repa]) cuentasRepartidores[repa] = 0;
-            cuentasRepartidores[repa] += monto;
+            // 1. Sumar al Total Global
+            globalTotal += monto;
+            document.getElementById('venta-total').innerText = `$${globalTotal.toLocaleString()}.00`;
 
-            dibujarCuentas();
+            // 2. Sumar al repartidor específico
+            if(!repartidoresData[repa]) {
+                repartidoresData[repa] = 0;
+                crearTarjetaRepartidor(repa);
+            }
+            repartidoresData[repa] += monto;
+            document.getElementById(`monto-${repa}`).innerText = `$${repartidoresData[repa]}.00`;
 
-            // Agregar a la tabla
+            // 3. Agregar al historial
             const fila = `<tr>
-                <td>${hora}</td>
-                <td><span class="badge bg-primary">${repa}</span></td>
+                <td><span class="badge bg-light text-dark">${hora}</span></td>
+                <td><b class="text-primary">${repa}</b></td>
                 <td>${p.comida}</td>
                 <td class="fw-bold text-success">$${monto}</td>
             </tr>`;
-            document.getElementById('tabla-ventas').innerHTML = fila + document.getElementById('tabla-ventas').innerHTML;
+            document.getElementById('historial-ventas').innerHTML = fila + document.getElementById('historial-ventas').innerHTML;
         });
 
-        function dibujarCuentas() {
-            const contenedor = document.getElementById('lista-repartidores');
-            contenedor.innerHTML = "";
-            
-            for (let repa in cuentasRepartidores) {
-                const div = document.createElement('div');
-                div.className = 'card-repartidor d-flex justify-content-between align-items-center';
-                div.innerHTML = `
-                    <div><span class="text-muted small">Repartidor</span><br><b>${repa}</b></div>
-                    <div class="monto-repa">$${cuentasRepartidores[repa]}.00</div>`;
-                contenedor.appendChild(div);
-            }
-        }
-
-        function borrarTodo() {
-            if(confirm("¿Estás seguro de reiniciar las cuentas? Esto borrará el historial del día.")) {
-                location.reload();
-            }
+        function crearTarjetaRepartidor(nombre) {
+            const grid = document.getElementById('repartidores-grid');
+            const col = document.createElement('div');
+            col.className = 'col-md-4';
+            col.innerHTML = `
+                <div class="repa-card text-center">
+                    <span class="text-muted small fw-bold">REPARTIDOR</span>
+                    <h3 class="fw-bold text-uppercase">${nombre}</h3>
+                    <div class="monto" id="monto-${nombre}">$0.00</div>
+                    <small class="text-muted">Efectivo en mano</small>
+                </div>`;
+            grid.appendChild(col);
         }
     </script>
 </body>
