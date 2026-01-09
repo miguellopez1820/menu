@@ -2,77 +2,72 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Panel Cocina Dash</title>
+    <title>COCINA - Dash Food</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
     <style>
-        body { background: #000; color: #fff; }
-        .card-order { background: #1a1a1a; border: 2px solid #00e5ff; border-radius: 15px; margin-bottom: 20px; padding: 20px; }
-        .label-importante { color: #ffeb3b; font-weight: bold; font-size: 1.2rem; }
-        .caja-info { background: #000; border: 1px solid #444; padding: 10px; border-radius: 10px; margin-top: 10px; }
-        .texto-direccion { color: #fff; font-size: 1.1rem; font-weight: bold; }
+        body { background: #000; color: #fff; font-family: sans-serif; }
+        .card-pedido { background: #111; border: 2px solid #333; border-radius: 15px; overflow: hidden; }
+        .barra-titulo { background: #222; padding: 10px; border-bottom: 2px solid #444; }
+        .nombre-cliente { color: #00e5ff; font-size: 1.4rem; font-weight: bold; }
+        .orden-texto { color: #fff; font-size: 1.2rem; }
+        .caja-notas { background: #332b00; border: 1px solid #ffd700; color: #ffd700; padding: 10px; border-radius: 8px; font-weight: bold; }
+        .caja-direccion { background: #002b36; border: 1px solid #00e5ff; color: #00e5ff; padding: 10px; border-radius: 8px; font-weight: bold; margin-top: 10px; }
+        .btn-accion { font-weight: bold; padding: 12px; border-radius: 10px; }
     </style>
 </head>
 <body class="p-3">
-    <div class="container-fluid">
-        <div class="row">
-            <div class="col-md-8">
-                <h2 class="fw-bold mb-4">👨‍🍳 COCINA DASH <span id="badge-count" class="badge bg-danger ms-2">0</span></h2>
-                <div id="lista-pedidos" class="row"></div>
-            </div>
-            <div class="col-md-4 border-start border-secondary">
-                <h4 class="text-success fw-bold">📜 HISTORIAL</h4>
-                <div id="historial" style="max-height: 80vh; overflow-y: auto;"></div>
-            </div>
-        </div>
-    </div>
-    <audio id="sonido-pedido" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"></audio>
+    <h2 class="fw-bold mb-4">👨‍🍳 PEDIDOS ACTIVOS <span id="count" class="badge bg-danger">0</span></h2>
+    <div id="lista-cocina" class="row g-3"></div>
+
+    <audio id="alarma" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"></audio>
+
     <script>
         const ably = new Ably.Realtime('DTn3Xw.LRKcmg:kyc7qhpjvAETzWfzWTVNnLerapobqPaCivYdBVk97OA');
         const canal = ably.channels.get('pedidos-dash');
-        const audio = document.getElementById('sonido-pedido');
-        let contador = 0;
+        const audio = document.getElementById('alarma');
 
         canal.subscribe('nuevo', (msg) => {
             const p = msg.data;
             audio.play().catch(e => {});
-            contador++;
-            document.getElementById('badge-count').innerText = contador;
-
-            const card = document.createElement('div');
-            card.className = 'col-md-6'; card.id = `ord-${p.id}`;
-            card.innerHTML = `
-                <div class="card card-order shadow-lg">
-                    <h3 class="label-importante">${p.nombre}</h3>
-                    <p class="fs-4">🍔 <b>ORDEN:</b> ${p.comida}</p>
-                    <div class="caja-info">
-                        <p class="text-danger fw-bold m-0">📝 NOTAS:</p>
-                        <p class="text-white fs-5 m-0">${p.notas || "SIN NOTAS"}</p>
+            
+            const div = document.createElement('div');
+            div.className = 'col-md-6 col-lg-4';
+            div.id = `ped-${p.id}`;
+            div.innerHTML = `
+                <div class="card card-pedido shadow-lg">
+                    <div class="barra-titulo d-flex justify-content-between">
+                        <span class="nombre-cliente">${p.nombre}</span>
+                        <span class="badge bg-dark border">NUEVO</span>
                     </div>
-                    <div class="caja-info bg-primary">
-                        <p class="text-white fw-bold m-0">🏠 DIRECCIÓN:</p>
-                        <p class="texto-direccion m-0">${p.direccion}</p>
-                    </div>
-                    <div class="d-flex gap-2 mt-3">
-                        <button class="btn btn-warning btn-lg w-100 fw-bold" onclick="updateStatus('${p.id}', 'cocinando')">🔥 COCINAR</button>
-                        <button class="btn btn-primary btn-lg w-100 fw-bold" onclick="mandarReparto('${p.id}', '${encodeURIComponent(JSON.stringify(p))}')">🛵 ENVIAR</button>
+                    <div class="p-3">
+                        <p class="orden-texto">🍔 <b>${p.comida}</b></p>
+                        <div class="caja-notas mb-2 small">📝 NOTAS: ${p.notas || 'SIN CAMBIOS'}</div>
+                        <div class="caja-direccion small">🏠 DIRECCIÓN:<br>${p.direccion}</div>
+                        <div class="d-flex gap-2 mt-3">
+                            <button class="btn btn-warning btn-accion w-100" onclick="update('${p.id}','cocinando')">🔥 COCINAR</button>
+                            <button class="btn btn-primary btn-accion w-100" onclick="enviar('${p.id}', '${encodeURIComponent(JSON.stringify(p))}')">🛵 ENVIAR</button>
+                        </div>
                     </div>
                 </div>`;
-            document.getElementById('lista-pedidos').prepend(card);
+            document.getElementById('lista-cocina').prepend(div);
+            actualizarContador(1);
         });
 
-        function updateStatus(id, estado) { canal.publish('status-' + id, { estado: estado }); }
+        function update(id, st) { canal.publish('status-'+id, {estado: st}); }
+        
+        function enviar(id, data) {
+            const p = JSON.parse(decodeURIComponent(data));
+            canal.publish('status-'+id, {estado: 'camino'});
+            canal.publish('para-repartidor', p); // Mandar al repartidor
+            canal.publish('para-gerente', p);    // Mandar a las cuentas
+            document.getElementById(`ped-${id}`).remove();
+            actualizarContador(-1);
+        }
 
-        function mandarReparto(id, pData) {
-            const pedido = JSON.parse(decodeURIComponent(pData));
-            canal.publish('status-' + id, { estado: 'camino' });
-            canal.publish('para-repartidor', pedido); // ESTA ES LA SEÑAL CLAVE
-            document.getElementById(`ord-${id}`).remove();
-            
-            // Agregar al historial local
-            const h = document.createElement('div');
-            h.innerHTML = `<div class="p-2 border-bottom border-secondary text-white-50 small">${pedido.nombre} - ${pedido.comida}</div>`;
-            document.getElementById('historial').prepend(h);
+        function actualizarContador(n) {
+            const b = document.getElementById('count');
+            b.innerText = parseInt(b.innerText) + n;
         }
     </script>
 </body>
