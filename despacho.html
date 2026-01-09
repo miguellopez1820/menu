@@ -2,47 +2,47 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Despacho Pro</title>
+    <title>Despacho Dash</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
-    <style>
-        body { background: #f0f2f5; }
-        .order-card { background: #fff; border-radius: 15px; border-left: 6px solid #007bff; padding: 20px; margin-bottom: 15px; }
-    </style>
 </head>
-<body class="p-4">
-    <h2 class="fw-bold mb-4">Administrador de Despacho</h2>
-    <div id="lista-pendientes" class="row"></div>
+<body class="p-4 bg-light">
+    <h2 class="fw-bold mb-4">Administrador de Pedidos</h2>
+    <div id="lista-despacho" class="row"></div>
 
     <script>
         const ably = new Ably.Realtime('DTn3Xw.LRKcmg:kyc7qhpjvAETzWfzWTVNnLerapobqPaCivYdBVk97OA');
         const canal = ably.channels.get('pedidos-dash');
-        let folio = parseInt(localStorage.getItem('folio')) || 1;
+        let folio = parseInt(localStorage.getItem('folio_dash')) || 1;
 
         canal.subscribe('nuevo', (msg) => {
             const p = msg.data;
             p.folio = folio++;
-            localStorage.setItem('folio', folio);
-            canal.publish('status-' + p.id, { folio: p.folio }); // Informar folio al cliente
+            localStorage.setItem('folio_dash', folio);
+            
+            // Informar folio al cliente de inmediato
+            canal.publish('status-' + p.id, { folio: p.folio });
 
             const div = document.createElement('div');
-            div.className = "col-md-4"; div.id = `d-${p.id}`;
+            div.className = "col-md-4 mb-3"; div.id = `d-${p.id}`;
             div.innerHTML = `
-                <div class="order-card shadow-sm">
+                <div class="card p-3 shadow-sm border-primary">
                     <h5>Folio #${p.folio} - ${p.nombre}</h5>
-                    <p class="small">${p.comida}<br>${p.direccion}</p>
+                    <p class="small text-muted">${p.direccion}</p>
                     <select id="sel-${p.id}" class="form-select mb-2">
-                        <option>Juan</option><option>Pedro</option><option>Miguel</option>
+                        <option value="Juan">Asignar a Juan</option>
+                        <option value="Pedro">Asignar a Pedro</option>
                     </select>
-                    <button class="btn btn-primary w-100" onclick="despachar('${p.id}', '${encodeURIComponent(JSON.stringify(p))}')">ASIGNAR REPARTIDOR</button>
+                    <button class="btn btn-primary w-100" onclick="despachar('${p.id}', '${encodeURIComponent(JSON.stringify(p))}')">DESPACHAR A REPA</button>
                 </div>`;
-            document.getElementById('lista-pendientes').appendChild(div);
+            document.getElementById('lista-despacho').appendChild(div);
         });
 
         function despachar(id, data) {
             const p = JSON.parse(decodeURIComponent(data));
             const repa = document.getElementById(`sel-${id}`).value;
             p.repartidor = repa;
+            
             canal.publish('asignado-' + repa, p);
             canal.publish('status-' + id, { estado: 'camino' });
             document.getElementById(`d-${id}`).remove();
