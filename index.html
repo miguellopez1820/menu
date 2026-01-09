@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dash Food - Menú</title>
+    <title>Dash Food - Ordenar</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
     <style>
@@ -24,12 +24,12 @@
         <div id="pantalla-menu">
             <div class="p-4 bg-dark text-white text-center rounded-bottom shadow">
                 <h2 class="fw-bold mb-0">Dash Food 🍔</h2>
-                <div class="badge bg-success mt-2 p-2">⏳ Entrega: <span id="tiempo-promo">45 - 55</span> MIN</div>
+                <div class="badge bg-success mt-2 p-2">⏳ Promedio de entrega: <span id="tiempo-promo">45 - 55</span> MIN</div>
             </div>
             <div id="contenedor-menu" class="p-3"></div>
             <div class="p-3 bg-white mx-3 rounded-4 shadow-sm mb-3">
                 <input type="text" id="nombre" class="form-control mb-2" placeholder="Tu nombre">
-                <textarea id="direccion" class="form-control mb-3" placeholder="Dirección completa"></textarea>
+                <textarea id="direccion" class="form-control mb-3" placeholder="Dirección y referencias"></textarea>
                 <h6 class="fw-bold">Método de Pago:</h6>
                 <div class="d-flex gap-2">
                     <input type="radio" class="btn-check" name="pago" id="p_ef" value="Efectivo" checked>
@@ -66,7 +66,8 @@
     const canal = ably.channels.get('pedidos-dash');
 
     const menuData = [
-        { cat: "Especialidades", items: [{id:"h1", nom:"Hawaiana", pre:135}, {id:"h2", nom:"BBQ Mango", pre:160}, {id:"h3", nom:"Mexicana", pre:145}]}
+        { cat: "Alimentos", area: "Alimentos", items: [{id:"h1", nom:"Hawaiana", pre:135}, {id:"h2", nom:"BBQ Mango", pre:160}, {id:"t1", nom:"Tacos", pre:120}]},
+        { cat: "Snacks", area: "Snacks", items: [{id:"a1", nom:"Alitas BBQ", pre:160}, {id:"b1", nom:"Bionico", pre:65}]}
     ];
 
     let carrito = {}; let total = 0; let envio = 15;
@@ -108,26 +109,10 @@
         const dir = document.getElementById('direccion').value;
         const pago = document.querySelector('input[name="pago"]:checked').value;
         if(!nom || !dir || total === 0) return alert("Faltan datos");
-        document.getElementById('btn-ordenar').disabled = true;
-
-        navigator.geolocation.getCurrentPosition((pos) => {
-            const id = Date.now();
-            let lista = ""; for(let k in carrito) if(carrito[k].cant > 0) lista += `${carrito[k].cant}x ${carrito[k].nom}, `;
-            const data = { id, creado: id, nombre: nom, total, comida: lista, direccion: dir, pago, gps: `https://www.google.com/maps?q=${pos.coords.latitude},${pos.coords.longitude}` };
-            localStorage.setItem('current_order', JSON.stringify(data));
-            canal.publish('nuevo', data, () => { location.reload(); });
-        });
-    }
-
-    function escucharStatus(id) {
-        canal.subscribe('status-' + id, (m) => {
-            const s = m.data;
-            if(s.folio) document.getElementById('folio-display').innerText = s.folio;
-            if(s.estado === 'cocinando') document.getElementById('st-2').classList.add('active');
-            if(s.estado === 'camino') { document.getElementById('st-2').classList.add('active'); document.getElementById('st-3').classList.add('active'); }
-            if(s.estado === 'entregado') { document.getElementById('st-4').classList.add('active'); localStorage.removeItem('current_order'); }
-        });
-    }
-</script>
-</body>
-</html>
+        
+        let itemsAlimentos = ""; let itemsSnacks = "";
+        for(let k in carrito) {
+            if(carrito[k].cant > 0) {
+                let area = "";
+                menuData.forEach(cat => { if(cat.items.find(i => i.id === k)) area = cat.area; });
+                const linea = `${carrito[k].cant} x ${carrito[k].nom}\n`;
