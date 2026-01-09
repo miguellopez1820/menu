@@ -2,62 +2,50 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Despacho Dash</title>
+    <title>Despacho</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
 </head>
 <body class="bg-light p-4">
-    <h2 class="fw-bold mb-4">📦 Centro de Despacho</h2>
-    <div id="lista-despacho" class="row"></div>
-
+    <h2 class="fw-bold mb-4">📦 Centro de Control</h2>
+    <div id="lista" class="row"></div>
 <script>
     const ably = new Ably.Realtime('DTn3Xw.LRKcmg:kyc7qhpjvAETzWfzWTVNnLerapobqPaCivYdBVk97OA');
     const canal = ably.channels.get('pedidos-dash');
     let folio = parseInt(localStorage.getItem('f_dash')) || 1;
-    let pendientes = JSON.parse(localStorage.getItem('p_despacho')) || [];
+    let pendientes = [];
 
-    pendientes.forEach(p => dibujar(p));
-
-    canal.subscribe('nuevo', (msg) => {
-        const p = msg.data; if(pendientes.find(x => x.id == p.id)) return;
-        p.folio = folio++; localStorage.setItem('f_dash', folio);
-        pendientes.push(p); localStorage.setItem('p_despacho', JSON.stringify(pendientes));
-        canal.publish('status-' + p.id, { folio: p.folio });
+    canal.subscribe('nuevo', (m) => {
+        const p = m.data; p.folio = folio++; localStorage.setItem('f_dash', folio);
+        pendientes.push(p);
         canal.publish('update-folio', { id: p.id, folio: p.folio });
-        dibujar(p);
+        canal.publish('status-'+p.id, { folio: p.folio });
+        
+        const div = document.createElement('div'); div.id = `d-${p.id}`; div.className = "col-4 mb-3";
+        div.innerHTML = `<div class="card p-3 shadow-sm border-primary">
+            <h5>Folio #${p.folio}</h5>
+            <pre class="small">${p.alimentos}${p.snacks}</pre>
+            <div id="st-Alimentos-${p.id}" class="badge bg-secondary mb-1">C1: Esperando</div>
+            <div id="st-Snacks-${p.id}" class="badge bg-secondary mb-3">C2: Esperando</div>
+            ${!p.presencial ? `<select id="sel-${p.id}" class="form-select mb-2"><option value="Juan">Juan</option><option value="Pedro">Pedro</option></select>
+            <button class="btn btn-primary w-100" onclick="enviar('${p.id}')">DESPACHAR</button>` : `<button class="btn btn-dark w-100" onclick="entregarLocal('${p.id}')">ENTREGAR EN LOCAL</button>`}
+        </div>`;
+        document.getElementById('lista').prepend(div);
     });
 
-    function dibujar(p) {
-        const div = document.createElement('div');
-        div.className = "col-md-4 mb-3"; div.id = `d-${p.id}`;
-        div.innerHTML = `
-            <div class="card p-3 shadow-sm border-primary">
-                <div class="d-flex justify-content-between">
-                    <h5 class="fw-bold">Folio #${p.folio}</h5>
-                    <span id="td-${p.id}" class="badge bg-dark">0:00</span>
-                </div>
-                <p class="small text-muted mb-1">${p.comida}</p>
-                <div class="badge ${p.pago==='Tarjeta'?'bg-primary':'bg-success'} mb-2 text-uppercase">${p.pago}</div>
-                <select id="sel-${p.id}" class="form-select mb-2 fw-bold"><option value="Juan">Juan</option><option value="Pedro">Pedro</option></select>
-                <button class="btn btn-primary w-100 fw-bold" onclick="enviar('${p.id}')">DESPACHAR RUTA</button>
-            </div>`;
-        document.getElementById('lista-despacho').appendChild(div);
-        setInterval(() => {
-            const el = document.getElementById(`td-${p.id}`); if(!el) return;
-            const min = Math.floor((Date.now() - p.creado) / 60000);
-            const seg = Math.floor(((Date.now() - p.creado) % 60000) / 1000);
-            el.innerText = `${min}:${seg < 10 ? '0'+seg : seg}`;
-        }, 1000);
-    }
+    canal.subscribe('cocina-lista', (m) => {
+        const el = document.getElementById(`st-${m.data.area}-${m.data.id}`);
+        if(el) { el.className = "badge bg-success mb-1"; el.innerText = m.data.area + ": LISTO"; }
+    });
 
-    function enviar(id) {
-        const p = pendientes.find(x => x.id == id);
-        const r = document.getElementById('sel-'+id).value;
-        p.repartidor = r;
-        canal.publish('asignado-' + r, p);
-        canal.publish('status-' + id, { estado: 'camino' });
-        pendientes = pendientes.filter(x => x.id != id);
-        localStorage.setItem('p_despacho', JSON.stringify(pendientes));
+    function enviar(id){
+        const p = pendientes.find(x => x.id == id); const r = document.getElementById('sel-'+id).value;
+        p.repartidor = r; canal.publish('asignado-'+r, p);
+        canal.publish('status-'+id, { estado: 'camino' });
+        document.getElementById('d-'+id).remove();
+    }
+    function entregarLocal(id){
+        canal.publish('para-gerente', pendientes.find(x => x.id == id));
         document.getElementById('d-'+id).remove();
     }
 </script>
