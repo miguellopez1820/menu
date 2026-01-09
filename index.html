@@ -3,263 +3,100 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dash Food - Pedido en Vivo</title>
+    <title>Dash Food - Menú</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
     <style>
-        :root { --uber-green: #06C167; }
-        body { background: #f7f7f7; font-family: 'Segoe UI', sans-serif; color: #333; }
-        .app-card { border-radius: 20px; border: none; box-shadow: 0 4px 15px rgba(0,0,0,0.1); background: white; }
-        .btn-order { background: #000; color: #fff; border-radius: 12px; padding: 18px; width: 100%; font-weight: bold; border: none; transition: 0.3s; font-size: 1.1rem; }
-        .btn-order:disabled { background: #555; }
-        .step { position: relative; padding-left: 50px; margin-bottom: 40px; color: #ccc; transition: 0.4s; }
-        .step::before { content: ""; position: absolute; left: 18px; top: 0; bottom: -40px; width: 2px; background: #eee; }
-        .step:last-child::before { display: none; }
-        .step-icon { position: absolute; left: 0; width: 38px; height: 38px; background: #eee; border-radius: 50%; display: flex; align-items: center; justify-content: center; z-index: 1; transition: 0.4s; }
-        .active { color: #000; font-weight: bold; }
-        .active .step-icon { background: var(--uber-green); color: white; }
+        body { background: #f8f9fa; font-family: sans-serif; }
+        .producto-card { background: white; border-radius: 15px; padding: 15px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .btn-cant { width: 35px; height: 35px; border-radius: 50%; border: 1px solid #ddd; background: white; font-weight: bold; }
+        .btn-pedir { background: #000; color: #fff; width: 100%; padding: 15px; border-radius: 15px; font-weight: bold; border: none; margin-top: 20px; }
+        .carrito-resumen { background: #e9ecef; border-radius: 10px; padding: 15px; margin-top: 15px; }
     </style>
 </head>
-<body>
-
-<div id="pantalla-pedido" class="container py-4">
-    <header class="text-center mb-4">
-        <h2 class="fw-bold">Dash Food 🍔</h2>
-        <p class="text-muted">Tu comida favorita a un clic</p>
-    </header>
-
-    <div class="card app-card p-4 shadow mb-4">
-        <div class="mb-3">
-            <label class="fw-bold small mb-1">Tu Nombre:</label>
-            <input type="text" id="nombre" class="form-control" placeholder="¿A nombre de quién?">
+<body class="p-3">
+    <h2 class="fw-bold mb-4">Dash Food 🍔</h2>
+    
+    <div id="menu">
+        <div class="producto-card">
+            <div><b>Hamburguesa</b><br><small class="text-muted">$120</small></div>
+            <div>
+                <button class="btn-cant" onclick="cambiarCant('hamburguesa', -1, 120)">-</button>
+                <span id="cant-hamburguesa" class="mx-2">0</span>
+                <button class="btn-cant" onclick="cambiarCant('hamburguesa', 1, 120)">+</button>
+            </div>
         </div>
-        
-        <div class="mb-3">
-            <label class="fw-bold small mb-1">Selecciona tu Orden:</label>
-            <select id="comida" class="form-select">
-                <option value="Hamburguesa Especial">Hamburguesa Especial - $120</option>
-                <option value="Pizza Pepperoni">Pizza Pepperoni - $150</option>
-                <option value="Alitas BBQ">Alitas BBQ - $130</option>
-            </select>
+        <div class="producto-card">
+            <div><b>Pizza Pepperoni</b><br><small class="text-muted">$150</small></div>
+            <div>
+                <button class="btn-cant" onclick="cambiarCant('pizza', -1, 150)">-</button>
+                <span id="cant-pizza" class="mx-2">0</span>
+                <button class="btn-cant" onclick="cambiarCant('pizza', 1, 150)">+</button>
+            </div>
         </div>
-
-        <div class="mb-3">
-            <label class="fw-bold small mb-1 text-primary">Especificaciones (Opcional):</label>
-            <textarea id="especificaciones" class="form-control" rows="2" placeholder="Ej: Sin cebolla, mucha salsa..."></textarea>
-        </div>
-
-        <div class="mb-4">
-            <label class="fw-bold small mb-1">Dirección Escrita:</label>
-            <textarea id="direccion" class="form-control" rows="2" placeholder="Calle, número y colonia"></textarea>
-        </div>
-        
-        <button onclick="enviarPedido()" class="btn-order shadow">CONFIRMAR PEDIDO 📍</button>
-    </div>
-</div>
-
-<div id="pantalla-tracking" class="container py-5 d-none">
-    <div class="card app-card p-4 text-center shadow-lg">
-        <h4 class="fw-bold mb-5">Estado de tu pedido 🛵</h4>
-        <div class="text-start ms-2">
-            <div id="step1" class="step active"><div class="step-icon">📩</div>Pedido Recibido</div>
-            <div id="step2" class="step"><div class="step-icon">🔥</div>Preparando en Cocina</div>
-            <div id="step3" class="step"><div class="step-icon">🛵</div>Repartidor en Camino</div>
+        <div class="producto-card">
+            <div><b>Alitas BBQ</b><br><small class="text-muted">$130</small></div>
+            <div>
+                <button class="btn-cant" onclick="cambiarCant('alitas', -1, 130)">-</button>
+                <span id="cant-alitas" class="mx-2">0</span>
+                <button class="btn-cant" onclick="cambiarCant('alitas', 1, 130)">+</button>
+            </div>
         </div>
     </div>
-</div>
 
-<script>
-    const ably = new Ably.Realtime('DTn3Xw.LRKcmg:kyc7qhpjvAETzWfzWTVNnLerapobqPaCivYdBVk97OA');
-    const canal = ably.channels.get('pedidos-dash');
-    let idPedido = "P-" + Math.floor(Math.random() * 10000);
-
-    function enviarPedido() {
-        const nombre = document.getElementById('nombre').value;
-        const direccion = document.getElementById('direccion').value;
-        
-        if(!nombre || !direccion) {
-            alert("Por favor, ingresa tu nombre y dirección.");
-            return;
-        }
-
-        const btn = document.querySelector('.btn-order');
-        btn.innerText = "LOCALIZANDO GPS... 🕒";
-        btn.disabled = true;
-
-        if ("geolocation" in navigator) {
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    const lat = position.coords.latitude;
-                    const lon = position.coords.longitude;
-                    // FORMATO UNIVERSAL CORREGIDO
-                    const gpsLink = `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`;
-                    procesarEnvio(nombre, direccion, gpsLink);
-                },
-                (error) => {
-                    alert("GPS denegado. Se usará solo la dirección escrita.");
-                    procesarEnvio(nombre, direccion, "Sin GPS");
-                },
-                { enableHighAccuracy: true, timeout: 10000 }
-            );
-        } else {
-            procesarEnvio(nombre, direccion, "GPS no soportado");
-        }
-    }
-
-    function procesarEnvio(nombre, direccion, gpsLink) {
-        const datos = {
-            id: idPedido,
-            nombre: nombre,
-            comida: document.getElementById('comida').value,
-            notas: document.getElementById('especificaciones').value,
-            direccion: direccion,
-            gps: gpsLink
-        };
-
-        canal.publish('nuevo', datos);
-        document.getElementById('pantalla-pedido').classList.add('d-none');
-        document.getElementById('pantalla-tracking').classList.remove('d-none');
-
-        canal.subscribe('status-' + idPedido, (msg) => {
-            if(msg.data.estado === 'cocinando') document.getElementById('step2').classList.add('active');
-            if(msg.data.estado === 'camino') {
-                document.getElementById('step2').classList.add('active');
-                document.getElementById('step3').classList.add('active');
-            }
-        });
-    }
-</script>
-</body>
-</html><!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dash Food - Pedido en Vivo</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
-    <style>
-        :root { --uber-green: #06C167; }
-        body { background: #f7f7f7; font-family: 'Segoe UI', sans-serif; color: #333; }
-        .app-card { border-radius: 20px; border: none; box-shadow: 0 4px 15px rgba(0,0,0,0.1); background: white; }
-        .btn-order { background: #000; color: #fff; border-radius: 12px; padding: 18px; width: 100%; font-weight: bold; border: none; transition: 0.3s; font-size: 1.1rem; }
-        .btn-order:disabled { background: #555; }
-        .step { position: relative; padding-left: 50px; margin-bottom: 40px; color: #ccc; transition: 0.4s; }
-        .step::before { content: ""; position: absolute; left: 18px; top: 0; bottom: -40px; width: 2px; background: #eee; }
-        .step:last-child::before { display: none; }
-        .step-icon { position: absolute; left: 0; width: 38px; height: 38px; background: #eee; border-radius: 50%; display: flex; align-items: center; justify-content: center; z-index: 1; transition: 0.4s; }
-        .active { color: #000; font-weight: bold; }
-        .active .step-icon { background: var(--uber-green); color: white; }
-    </style>
-</head>
-<body>
-
-<div id="pantalla-pedido" class="container py-4">
-    <header class="text-center mb-4">
-        <h2 class="fw-bold">Dash Food 🍔</h2>
-        <p class="text-muted">Tu comida favorita a un clic</p>
-    </header>
-
-    <div class="card app-card p-4 shadow mb-4">
-        <div class="mb-3">
-            <label class="fw-bold small mb-1">Tu Nombre:</label>
-            <input type="text" id="nombre" class="form-control" placeholder="¿A nombre de quién?">
-        </div>
-        
-        <div class="mb-3">
-            <label class="fw-bold small mb-1">Selecciona tu Orden:</label>
-            <select id="comida" class="form-select">
-                <option value="Hamburguesa Especial">Hamburguesa Especial - $120</option>
-                <option value="Pizza Pepperoni">Pizza Pepperoni - $150</option>
-                <option value="Alitas BBQ">Alitas BBQ - $130</option>
-            </select>
-        </div>
-
-        <div class="mb-3">
-            <label class="fw-bold small mb-1 text-primary">Especificaciones (Opcional):</label>
-            <textarea id="especificaciones" class="form-control" rows="2" placeholder="Ej: Sin cebolla, mucha salsa..."></textarea>
-        </div>
-
-        <div class="mb-4">
-            <label class="fw-bold small mb-1">Dirección Escrita:</label>
-            <textarea id="direccion" class="form-control" rows="2" placeholder="Calle, número y colonia"></textarea>
-        </div>
-        
-        <button onclick="enviarPedido()" class="btn-order shadow">CONFIRMAR PEDIDO 📍</button>
+    <div class="carrito-resumen">
+        <b>Total: $<span id="total-cliente">0</span></b>
     </div>
-</div>
 
-<div id="pantalla-tracking" class="container py-5 d-none">
-    <div class="card app-card p-4 text-center shadow-lg">
-        <h4 class="fw-bold mb-5">Estado de tu pedido 🛵</h4>
-        <div class="text-start ms-2">
-            <div id="step1" class="step active"><div class="step-icon">📩</div>Pedido Recibido</div>
-            <div id="step2" class="step"><div class="step-icon">🔥</div>Preparando en Cocina</div>
-            <div id="step3" class="step"><div class="step-icon">🛵</div>Repartidor en Camino</div>
-        </div>
-    </div>
-</div>
+    <input type="text" id="nombre" class="form-control mt-3" placeholder="Tu nombre">
+    <textarea id="direccion" class="form-control mt-2" placeholder="Dirección completa"></textarea>
+    <textarea id="notas" class="form-control mt-2" placeholder="Notas (Sin cebolla, etc.)"></textarea>
+    
+    <button class="btn-pedir" onclick="enviarPedido()">ENVIAR PEDIDO 🚀</button>
 
-<script>
-    const ably = new Ably.Realtime('DTn3Xw.LRKcmg:kyc7qhpjvAETzWfzWTVNnLerapobqPaCivYdBVk97OA');
-    const canal = ably.channels.get('pedidos-dash');
-    let idPedido = "P-" + Math.floor(Math.random() * 10000);
+    <script>
+        const ably = new Ably.Realtime('DTn3Xw.LRKcmg:kyc7qhpjvAETzWfzWTVNnLerapobqPaCivYdBVk97OA');
+        const canal = ably.channels.get('pedidos-dash');
+        let carrito = {};
+        let totalPagar = 0;
 
-    function enviarPedido() {
-        const nombre = document.getElementById('nombre').value;
-        const direccion = document.getElementById('direccion').value;
-        
-        if(!nombre || !direccion) {
-            alert("Por favor, ingresa tu nombre y dirección.");
-            return;
+        function cambiarCant(id, cambio, precio) {
+            if(!carrito[id]) carrito[id] = 0;
+            carrito[id] = Math.max(0, carrito[id] + cambio);
+            document.getElementById('cant-'+id).innerText = carrito[id];
+            
+            // Recalcular total
+            totalPagar = (parseInt(document.getElementById('cant-hamburguesa').innerText) * 120) +
+                         (parseInt(document.getElementById('cant-pizza').innerText) * 150) +
+                         (parseInt(document.getElementById('cant-alitas').innerText) * 130);
+            document.getElementById('total-cliente').innerText = totalPagar;
         }
 
-        const btn = document.querySelector('.btn-order');
-        btn.innerText = "LOCALIZANDO GPS... 🕒";
-        btn.disabled = true;
+        function enviarPedido() {
+            const nombre = document.getElementById('nombre').value;
+            const direccion = document.getElementById('direccion').value;
+            if(!nombre || totalPagar === 0) return alert("Agrega productos y tu nombre");
 
-        if ("geolocation" in navigator) {
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    const lat = position.coords.latitude;
-                    const lon = position.coords.longitude;
-                    // FORMATO UNIVERSAL CORREGIDO
-                    const gpsLink = `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`;
-                    procesarEnvio(nombre, direccion, gpsLink);
-                },
-                (error) => {
-                    alert("GPS denegado. Se usará solo la dirección escrita.");
-                    procesarEnvio(nombre, direccion, "Sin GPS");
-                },
-                { enableHighAccuracy: true, timeout: 10000 }
-            );
-        } else {
-            procesarEnvio(nombre, direccion, "GPS no soportado");
+            let resumenComida = "";
+            if(carrito.hamburguesa > 0) resumenComida += `${carrito.hamburguesa} Haburguesa(s) `;
+            if(carrito.pizza > 0) resumenComida += `${carrito.pizza} Pizza(s) `;
+            if(carrito.alitas > 0) resumenComida += `${carrito.alitas} Alitas `;
+
+            navigator.geolocation.getCurrentPosition((p) => {
+                const gps = `https://www.google.com/maps?q=${p.coords.latitude},${p.coords.longitude}`;
+                canal.publish('nuevo', {
+                    id: Date.now(),
+                    nombre: nombre,
+                    comida: resumenComida,
+                    total: totalPagar, // Enviamos el número limpio para el gerente
+                    direccion: direccion,
+                    notas: document.getElementById('notas').value,
+                    gps: gps
+                });
+                alert("¡Pedido enviado!");
+                location.reload();
+            });
         }
-    }
-
-    function procesarEnvio(nombre, direccion, gpsLink) {
-        const datos = {
-            id: idPedido,
-            nombre: nombre,
-            comida: document.getElementById('comida').value,
-            notas: document.getElementById('especificaciones').value,
-            direccion: direccion,
-            gps: gpsLink
-        };
-
-        canal.publish('nuevo', datos);
-        document.getElementById('pantalla-pedido').classList.add('d-none');
-        document.getElementById('pantalla-tracking').classList.remove('d-none');
-
-        canal.subscribe('status-' + idPedido, (msg) => {
-            if(msg.data.estado === 'cocinando') document.getElementById('step2').classList.add('active');
-            if(msg.data.estado === 'camino') {
-                document.getElementById('step2').classList.add('active');
-                document.getElementById('step3').classList.add('active');
-            }
-        });
-    }
-</script>
+    </script>
 </body>
 </html>
