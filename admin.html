@@ -5,14 +5,10 @@
     <title>Cocina - Dash Food</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
-    <style>
-        body { background: #000; color: #fff; }
-        .order-box { background: #111; border: 2px solid #333; border-radius: 15px; margin-bottom: 15px; }
-        .comida-txt { font-size: 2.2rem; color: #ffeb3b; font-weight: bold; }
-    </style>
+    <style>body{background:#000;color:#fff;}.order-box{background:#111;border:2px solid #333;border-radius:15px;margin-bottom:15px;}.comida-txt{font-size:2rem;color:#ffeb3b;font-weight:bold;}</style>
 </head>
 <body class="p-3">
-    <h2 class="fw-bold mb-4 text-uppercase">👨‍🍳 Cocina en Vivo</h2>
+    <h2 class="fw-bold mb-4">👨‍🍳 COCINA</h2>
     <div id="lista-cocina"></div>
     <audio id="snd" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"></audio>
 
@@ -20,20 +16,16 @@
         const ably = new Ably.Realtime('DTn3Xw.LRKcmg:kyc7qhpjvAETzWfzWTVNnLerapobqPaCivYdBVk97OA');
         const canal = ably.channels.get('pedidos-dash');
 
+        let pedidos = JSON.parse(localStorage.getItem('p_cocina')) || [];
+        pedidos.forEach(p => dibujar(p));
+
         canal.subscribe('nuevo', (msg) => {
-            const p = msg.data; document.getElementById('snd').play();
-            const div = document.createElement('div');
-            div.id = `c-${p.id}`; div.className = "order-box p-3 shadow-lg";
-            div.innerHTML = `
-                <div class="d-flex justify-content-between align-items-center">
-                    <h3 class="mb-0">FOLIO: <span id="fol-${p.id}" class="text-danger">---</span></h3>
-                    <span class="text-muted">${p.nombre}</span>
-                </div>
-                <hr>
-                <div class="comida-txt mb-3 text-uppercase">${p.comida}</div>
-                <button class="btn btn-warning btn-lg w-100 fw-bold py-3 mb-2" onclick="update('${p.id}','cocinando')">🔥 EMPEZAR A COCINAR</button>
-                <button class="btn btn-primary btn-lg w-100 fw-bold py-3" onclick="remover('${p.id}')">📦 ENVIAR A DESPACHO</button>`;
-            document.getElementById('lista-cocina').prepend(div);
+            const p = msg.data;
+            if(pedidos.find(x => x.id == p.id)) return;
+            pedidos.push(p);
+            localStorage.setItem('p_cocina', JSON.stringify(pedidos));
+            dibujar(p);
+            document.getElementById('snd').play();
         });
 
         canal.subscribe('update-folio', (m) => {
@@ -41,8 +33,23 @@
             if(el) el.innerText = "#" + m.data.folio;
         });
 
-        function update(id, st) { canal.publish('status-'+id, {estado: st}); }
-        function remover(id) { document.getElementById('c-'+id).remove(); }
+        function dibujar(p) {
+            const div = document.createElement('div');
+            div.id = `c-${p.id}`; div.className = "order-box p-3";
+            div.innerHTML = `
+                <div class="d-flex justify-content-between"><h4>FOLIO: <span id="fol-${p.id}" class="text-danger">---</span></h4></div>
+                <div class="comida-txt text-uppercase">${p.comida}</div>
+                <div class="mt-2"><button class="btn btn-warning w-100 mb-2" onclick="st('${p.id}','cocinando')">EMPEZAR COCINA</button>
+                <button class="btn btn-danger w-100" onclick="remover('${p.id}')">ENVIAR A DESPACHO</button></div>`;
+            document.getElementById('lista-cocina').prepend(div);
+        }
+
+        function st(id, s) { canal.publish('status-'+id, {estado: s}); }
+        function remover(id) {
+            pedidos = pedidos.filter(x => x.id != id);
+            localStorage.setItem('p_cocina', JSON.stringify(pedidos));
+            document.getElementById('c-'+id).remove();
+        }
     </script>
 </body>
 </html>
