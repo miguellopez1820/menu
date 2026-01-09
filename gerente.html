@@ -2,119 +2,94 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Gerente - Corte de Caja</title>
+    <title>Gerencia Pro</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
-    <style>
-        body { background: #f4f7f6; font-family: 'Segoe UI', sans-serif; }
-        .repa-card { background: white; border-radius: 15px; border-top: 5px solid #198754; padding: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
-        .monto { font-size: 1.8rem; font-weight: bold; color: #198754; }
-        .total-global { background: #000; color: #fff; padding: 25px; border-radius: 20px; margin-bottom: 30px; }
-    </style>
+    <style>body{background:#f0f2f5;}.monitor-repa{background:#000;color:#fff;border-radius:15px;padding:20px;}</style>
 </head>
 <body class="p-4">
-    <div class="container">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h2 class="fw-bold m-0">📊 Corte de Caja Permanente</h2>
-            <button class="btn btn-danger btn-sm" onclick="resetCaja()">REINICIAR TODO EL DÍA</button>
-        </div>
-
-        <div class="total-global text-center shadow-lg">
-            <span class="text-white-50 small fw-bold">VENTA TOTAL ACUMULADA</span>
-            <div class="display-3 fw-bold" id="venta-total">$0.00</div>
-        </div>
-
-        <div class="row mb-5">
-            <div class="col-md-5">
-                <h4 class="fw-bold mb-3">🛵 Por Repartidor</h4>
-                <div id="repartidores-grid">
-                    </div>
+    <div id="alertas-dinero" class="mb-3"></div>
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card p-4 text-center bg-white border-0 shadow-sm">
+                <small class="fw-bold opacity-50">PROMEDIO REAL HOY</small>
+                <h1 id="prom-hoy" class="fw-bold text-primary">0 min</h1>
+                <small id="cnt-pedidos" class="text-muted">0 entregas</small>
             </div>
-
-            <div class="col-md-7">
-                <div class="card p-4 border-0 shadow-sm rounded-4">
-                    <h4 class="fw-bold mb-3">📜 Historial del Día</h4>
-                    <div class="table-responsive">
-                        <table class="table table-hover align-middle">
-                            <thead class="table-light">
-                                <tr><th>Hora</th><th>Repartidor</th><th>Monto</th></tr>
-                            </thead>
-                            <tbody id="historial-ventas">
-                                </tbody>
-                        </table>
-                    </div>
-                </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card p-4 text-center bg-dark text-white border-0 shadow-sm">
+                <small class="fw-bold opacity-50">VENTA TOTAL</small>
+                <h1 id="venta-g" class="fw-bold text-success">$0.00</h1>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="monitor-repa shadow">
+                <h6 class="text-warning fw-bold">📍 MONITOR REPARTIDORES</h6>
+                <div id="tr-Juan" class="small mt-2">JUAN: <span class="badge bg-secondary">Offline</span></div>
+                <div id="tr-Pedro" class="small mt-2">PEDRO: <span class="badge bg-secondary">Offline</span></div>
             </div>
         </div>
     </div>
+    <div class="card p-4 border-0 shadow-sm">
+        <h5 class="fw-bold mb-3">HISTORIAL DE OPERACIÓN</h5>
+        <table class="table small">
+            <thead><tr><th>Folio</th><th>Metodo</th><th>Tiempo</th><th>Repartidor</th><th>Monto</th></tr></thead>
+            <tbody id="hist-tabla"></tbody>
+        </table>
+    </div>
+    <audio id="snd" src="https://assets.mixkit.co/active_storage/sfx/951/951-preview.mp3"></audio>
 
-    <script>
-        const ably = new Ably.Realtime('DTn3Xw.LRKcmg:kyc7qhpjvAETzWfzWTVNnLerapobqPaCivYdBVk97OA');
-        const canal = ably.channels.get('pedidos-dash');
+<script>
+    const ably = new Ably.Realtime('DTn3Xw.LRKcmg:kyc7qhpjvAETzWfzWTVNnLerapobqPaCivYdBVk97OA');
+    const canal = ably.channels.get('pedidos-dash');
 
-        // --- RECUPERAR DATOS AL CARGAR ---
-        let globalTotal = parseFloat(localStorage.getItem('g_total')) || 0;
-        let repartidoresData = JSON.parse(localStorage.getItem('g_repas')) || {};
-        let historialHTML = localStorage.getItem('g_historial') || "";
+    let totalV = parseFloat(localStorage.getItem('g_total')) || 0;
+    let minT = parseFloat(localStorage.getItem('g_minutos')) || 0;
+    let cntP = parseInt(localStorage.getItem('g_conteo')) || 0;
+    let histHTML = localStorage.getItem('g_hist_html') || "";
 
-        // Inicializar vista
+    actualizarVista();
+
+    canal.subscribe('para-gerente', (msg) => {
+        const p = msg.data; const t = Math.floor((Date.now() - p.creado) / 60000);
+        totalV += parseFloat(p.total); minT += t; cntP += 1;
+        const fila = `<tr><td>#${p.folio}</td><td>${p.pago}</td><td>${t} min</td><td>${p.repartidor}</td><td class="fw-bold text-success">$${p.total}</td></tr>`;
+        histHTML = fila + histHTML;
+        localStorage.setItem('g_total', totalV); localStorage.setItem('g_minutos', minT);
+        localStorage.setItem('g_conteo', cntP); localStorage.setItem('g_hist_html', histHTML);
         actualizarVista();
+        calcularSaturacion();
+    });
 
-        canal.subscribe('para-gerente', (msg) => {
-            const p = msg.data;
-            const repa = p.repartidor || "Sin Nombre";
-            const monto = Number(p.total) || 0;
-            const hora = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+    canal.subscribe('rastreo-repa', (msg) => {
+        const d = msg.data; const el = document.getElementById(`tr-${d.repartidor}`);
+        if(el) el.innerHTML = `${d.repartidor}: <span class="badge ${d.estado==='Entregando'?'bg-primary':'bg-success'}">${d.estado} #${d.folio}</span>`;
+    });
 
-            // 1. Sumar al Total Global
-            globalTotal += monto;
-            localStorage.setItem('g_total', globalTotal);
+    canal.subscribe('alerta-recaudacion', (m) => {
+        document.getElementById('snd').play();
+        const div = document.createElement('div'); div.className = "alert alert-danger fw-bold shadow-sm";
+        div.innerHTML = `💰 CORTE REQUERIDO: ${m.data.repartidor} tiene $${m.data.total}. <button onclick="this.parentElement.remove()" class="btn btn-sm btn-dark ms-3">ENTERADO</button>`;
+        document.getElementById('alertas-dinero').prepend(div);
+    });
 
-            // 2. Sumar al repartidor específico
-            if(!repartidoresData[repa]) repartidoresData[repa] = 0;
-            repartidoresData[repa] += monto;
-            localStorage.setItem('g_repas', JSON.stringify(repartidoresData));
-
-            // 3. Agregar al historial
-            const nuevaFila = `<tr>
-                <td><span class="badge bg-light text-dark border">${hora}</span></td>
-                <td><b class="text-primary">${repa}</b></td>
-                <td class="fw-bold text-success">$${monto}.00</td>
-            </tr>`;
-            historialHTML = nuevaFila + historialHTML;
-            localStorage.setItem('g_historial', historialHTML);
-
-            actualizarVista();
-        });
-
-        function actualizarVista() {
-            // Actualizar número grande
-            document.getElementById('venta-total').innerText = `$${globalTotal.toLocaleString()}.00`;
-            
-            // Actualizar tabla
-            document.getElementById('historial-ventas').innerHTML = historialHTML;
-
-            // Actualizar tarjetas de repartidores
-            const grid = document.getElementById('repartidores-grid');
-            grid.innerHTML = "";
-            for (let nombre in repartidoresData) {
-                const div = document.createElement('div');
-                div.className = 'repa-card d-flex justify-content-between align-items-center mb-3';
-                div.innerHTML = `
-                    <div><span class="text-muted small fw-bold">REPARTIDOR</span><br><b class="text-uppercase">${nombre}</b></div>
-                    <div class="monto">$${repartidoresData[nombre]}.00</div>`;
-                grid.appendChild(div);
-            }
+    function actualizarVista() {
+        document.getElementById('venta-g').innerText = `$${totalV}.00`;
+        document.getElementById('hist-tabla').innerHTML = histHTML;
+        if(cntP > 0) {
+            document.getElementById('prom-hoy').innerText = `${Math.round(minT/cntP)} min`;
+            document.getElementById('cnt-pedidos').innerText = `${cntP} entregas hoy`;
         }
+    }
 
-        function resetCaja() {
-            if(confirm("¿Quieres borrar todas las ventas y cuentas del día? Esta acción no se puede deshacer.")) {
-                localStorage.removeItem('g_total');
-                localStorage.removeItem('g_repas');
-                localStorage.removeItem('g_historial');
-                location.reload();
-            }
-        }
-    </script>
+    function calcularSaturacion() {
+        let base = 45;
+        const prom = cntP > 0 ? (minT/cntP) : 45;
+        let tFinal = Math.max(base, Math.round(prom));
+        canal.publish('ajuste-tiempo', { min: tFinal, max: tFinal + 10 });
+    }
+    setInterval(calcularSaturacion, 60000);
+</script>
 </body>
 </html>
