@@ -8,7 +8,7 @@
     <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
     <style>
         :root { --main-green: #06C167; }
-        body { background: #f8f9fa; font-family: 'Segoe UI', sans-serif; padding-bottom: 160px; }
+        body { background: #f8f9fa; font-family: 'Segoe UI', sans-serif; padding-bottom: 180px; }
         .cat-header { background: #000; color: #fff; padding: 5px 15px; border-radius: 10px; display: inline-block; margin: 15px 0 10px; font-size: 0.8rem; text-transform: uppercase; }
         .product-card { background: #fff; border-radius: 15px; padding: 12px; margin-bottom: 8px; border: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
         .btn-qty { width: 32px; height: 32px; border-radius: 8px; border: 1px solid #ddd; background: #fff; font-weight: bold; }
@@ -25,7 +25,7 @@
         <div id="pantalla-menu">
             <div class="p-4 bg-dark text-white text-center shadow rounded-bottom">
                 <h2 class="fw-bold mb-0">Dash Food 🍔</h2>
-                <small class="opacity-75">Tu pedido en tiempo real</small>
+                <small class="opacity-75">Ordena y rastrea tu pedido</small>
             </div>
             <div id="contenedor-menu" class="p-3"></div>
             <div class="p-3">
@@ -33,6 +33,7 @@
                 <textarea id="direccion" class="form-control mb-2" placeholder="Dirección completa"></textarea>
             </div>
             <div class="cart-footer">
+                <div id="desglose" class="small text-muted mb-1 px-1"></div>
                 <div class="d-flex justify-content-between mb-3 px-1"><b>Total:</b> <b id="total-txt" class="text-success fs-5">$0.00</b></div>
                 <button id="btn-ordenar" onclick="enviarPedido()" class="btn-confirm shadow">ORDENAR AHORA</button>
             </div>
@@ -46,7 +47,7 @@
                 <div id="st-3" class="step"><div class="dot">3</div> En Camino 🛵</div>
                 <div id="st-4" class="step"><div class="dot">4</div> Entregado ✅</div>
             </div>
-            <a id="btn-ayuda" href="#" target="_blank" class="btn btn-success w-100 mt-4 py-3 fw-bold rounded-4">Ayuda por WhatsApp 💬</a>
+            <a id="btn-ayuda" href="#" target="_blank" class="btn btn-success w-100 mt-4 py-3 fw-bold rounded-4 shadow-sm">Ayuda por WhatsApp 💬</a>
         </div>
     </div>
 
@@ -63,7 +64,7 @@
         ]}
     ];
 
-    let carrito = {}; let total = 0;
+    let carrito = {}; let total = 0; let envio = 15;
     const cont = document.getElementById('contenedor-menu');
     menuData.forEach(s => {
         cont.innerHTML += `<div class="cat-header">${s.cat}</div>`;
@@ -76,11 +77,21 @@
         if(!carrito[id]) carrito[id] = { cant: 0, nom: nom, pr: pr };
         carrito[id].cant = Math.max(0, carrito[id].cant + ch);
         document.getElementById('q-'+id).innerText = carrito[id].cant;
-        total = 0; for(let k in carrito) total += (carrito[k].cant * carrito[k].pr);
-        document.getElementById('total-txt').innerText = `$${total}.00`;
+        
+        let subtotal = 0;
+        for(let k in carrito) subtotal += (carrito[k].cant * carrito[k].pr);
+        
+        if(subtotal > 0) {
+            total = subtotal + envio;
+            document.getElementById('desglose').innerText = `Subtotal: $${subtotal} + Envío: $${envio}`;
+            document.getElementById('total-txt').innerText = `$${total}.00`;
+        } else {
+            total = 0;
+            document.getElementById('desglose').innerText = "";
+            document.getElementById('total-txt').innerText = `$0.00`;
+        }
     }
 
-    // PERSISTENCIA DEL RASTREO PARA EL CLIENTE
     const savedOrder = JSON.parse(localStorage.getItem('current_order'));
     if(savedOrder) {
         document.getElementById('pantalla-menu').classList.add('d-none');
@@ -90,7 +101,7 @@
 
     function enviarPedido() {
         const nom = document.getElementById('nombre').value;
-        if(!nom || total === 0) return alert("Llena tus datos");
+        if(!nom || total === 0) return alert("Selecciona productos y nombre");
         document.getElementById('btn-ordenar').disabled = true;
 
         navigator.geolocation.getCurrentPosition((pos) => {
@@ -99,9 +110,7 @@
             const data = { id, nombre: nom, total, comida: lista, direccion: document.getElementById('direccion').value, gps: `https://www.google.com/maps?q=${pos.coords.latitude},${pos.coords.longitude}` };
             
             localStorage.setItem('current_order', JSON.stringify(data));
-            canal.publish('nuevo', data, () => {
-                location.reload(); // Recargamos para activar el modo rastreo
-            });
+            canal.publish('nuevo', data, () => { location.reload(); });
         });
     }
 
@@ -111,10 +120,7 @@
             if(s.folio) document.getElementById('folio-display').innerText = s.folio;
             if(s.estado === 'cocinando') document.getElementById('st-2').classList.add('active');
             if(s.estado === 'camino') { document.getElementById('st-2').classList.add('active'); document.getElementById('st-3').classList.add('active'); }
-            if(s.estado === 'entregado') {
-                document.getElementById('st-4').classList.add('active');
-                localStorage.removeItem('current_order'); // Limpiar al finalizar
-            }
+            if(s.estado === 'entregado') { document.getElementById('st-4').classList.add('active'); localStorage.removeItem('current_order'); }
         });
     }
 </script>
