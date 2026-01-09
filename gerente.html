@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>GERENTE - Dash Food</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
+    <style>
+        body { background: #f0f2f5; font-family: sans-serif; }
+        .card-stats { border-radius: 15px; border: none; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+        .total-dinero { font-size: 2.5rem; font-weight: bold; color: #28a745; }
+    </style>
+</head>
+<body class="p-4">
+    <div class="container">
+        <h2 class="fw-bold mb-4">💰 Control de Ventas</h2>
+        
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="card card-stats p-4 text-center">
+                    <span class="text-muted small fw-bold">VENTAS DE HOY</span>
+                    <div class="total-dinero" id="total">$0.00</div>
+                    <span id="cant-pedidos" class="badge bg-secondary">0 pedidos</span>
+                </div>
+            </div>
+            <div class="col-md-8">
+                <div class="card card-stats p-4">
+                    <h5 class="fw-bold">📍 Rastreo de Entregas</h5>
+                    <div id="rastreo" class="small">Esperando envíos...</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card card-stats p-4">
+            <h5 class="fw-bold mb-3">📜 Historial Detallado</h5>
+            <table class="table">
+                <thead><tr><th>Hora</th><th>Cliente</th><th>Pedido</th><th>Monto</th></tr></thead>
+                <tbody id="tabla-ventas"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const ably = new Ably.Realtime('DTn3Xw.LRKcmg:kyc7qhpjvAETzWfzWTVNnLerapobqPaCivYdBVk97OA');
+        const canal = ably.channels.get('pedidos-dash');
+        let total = 0;
+        let count = 0;
+
+        canal.subscribe('para-gerente', (msg) => {
+            const p = msg.data;
+            const hora = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+            
+            // Extraer precio del texto (ej: "Hamburguesa - $120")
+            const precio = parseInt(p.comida.split('$')[1]) || 0;
+            total += precio;
+            count++;
+
+            document.getElementById('total').innerText = `$${total}.00`;
+            document.getElementById('cant-pedidos').innerText = `${count} pedidos`;
+
+            // Agregar a la tabla
+            const fila = `<tr><td>${hora}</td><td>${p.nombre}</td><td>${p.comida}</td><td class="text-success fw-bold">$${precio}</td></tr>`;
+            document.getElementById('tabla-ventas').innerHTML = fila + document.getElementById('tabla-ventas').innerHTML;
+
+            // Actualizar rastro
+            document.getElementById('rastreo').innerHTML = `<div class="alert alert-info">🛵 <b>${p.nombre}</b> está en camino a su domicilio.</div>`;
+        });
+    </script>
+</body>
+</html>
