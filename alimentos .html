@@ -2,35 +2,140 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Cocina Alimentos</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KDS - Cocina Alimentos</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
     <style>
-        body { background: #000; color: #fff; }
-        .ticket { background: #fff; color: #000; min-width: 320px; border-radius: 8px; margin: 10px; }
-        .pedido-txt { font-size: 2rem; font-weight: 900; color: #d32f2f; line-height: 1.1; }
+        :root { --accent: #d32f2f; --bg: #0a0a0a; }
+        body { background: var(--bg); color: #fff; font-family: 'Segoe UI', sans-serif; overflow-x: hidden; }
+        .ticket-container { display: flex; overflow-x: auto; gap: 20px; padding: 20px; min-height: 80vh; }
+        
+        .ticket { 
+            background: #fff; color: #000; min-width: 350px; max-width: 350px; 
+            border-radius: 12px; display: flex; flex-direction: column;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8); border-top: 15px solid var(--accent);
+            animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+        .ticket-header { background: #222; color: #fff; padding: 12px; display: flex; justify-content: space-between; align-items: center; border-radius: 0; }
+        .pedido-detalle { font-size: 2.2rem; font-weight: 900; line-height: 1.1; color: #000; text-transform: uppercase; white-space: pre-wrap; padding: 15px 0; }
+        
+        .timer-badge { font-family: monospace; font-size: 1.4rem; background: #eee; padding: 5px 10px; border-radius: 6px; color: #000; font-weight: bold; }
+        .btn-ready { background: #2e7d32; color: #fff; border: none; padding: 20px; width: 100%; font-weight: bold; font-size: 1.5rem; border-radius: 0 0 12px 12px; transition: 0.2s; }
+        .btn-ready:active { background: #1b5e20; transform: scale(0.98); }
+        
+        .tipo-badge { padding: 4px 10px; border-radius: 20px; font-size: 0.9rem; font-weight: bold; }
+        .badge-domicilio { background: #e3f2fd; color: #1976d2; border: 1px solid #1976d2; }
+        .badge-local { background: #000; color: #fff; }
     </style>
 </head>
-<body class="p-3">
-    <h2 class="text-danger fw-bold">🔥 COCINA: ALIMENTOS</h2>
-    <div id="lista" class="d-flex overflow-auto"></div>
+<body>
+
+    <div class="p-3 d-flex justify-content-between align-items-center bg-dark border-bottom border-danger">
+        <h1 class="fw-bold m-0 text-danger">🔥 COCINA: ALIMENTOS</h1>
+        <div id="reloj" class="fs-3 fw-bold text-white-50">00:00:00</div>
+    </div>
+
+    <div id="lista-alimentos" class="ticket-container">
+        </div>
+
+    <audio id="snd-nuevo" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"></audio>
+
 <script>
     const ably = new Ably.Realtime('DTn3Xw.LRKcmg:kyc7qhpjvAETzWfzWTVNnLerapobqPaCivYdBVk97OA');
     const canal = ably.channels.get('pedidos-dash');
-    canal.subscribe('nuevo', (m) => {
-        const p = m.data; if(!p.alimentos) return;
-        const div = document.createElement('div'); div.id = `t-${p.id}`; div.className = "ticket p-3 shadow";
-        div.innerHTML = `<h4 class="fw-bold">FOLIO <span id="fol-${p.id}">--</span></h4>
-        <div class="pedido-txt text-uppercase">${p.alimentos}</div><hr>
-        <button class="btn btn-success w-100 fw-bold" onclick="listo('${p.id}')">LISTO ✅</button>`;
-        document.getElementById('lista').prepend(div);
+
+    // Memoria local para no perder pedidos si se refresca la pantalla
+    let pedidosAlimentos = JSON.parse(localStorage.getItem('p_cocina_alimentos')) || [];
+    pedidosAlimentos.forEach(p => dibujarTicket(p));
+
+    // Reloj digital
+    setInterval(() => { document.getElementById('reloj').innerText = new Date().toLocaleTimeString(); }, 1000);
+
+    // Escuchar nuevos pedidos
+    canal.subscribe('nuevo', (msg) => {
+        const p = msg.data;
+        
+        // FILTRO CRÍTICO: Si no hay contenido para Alimentos, se ignora
+        if(!p.alimentos || p.alimentos.trim() === "") return;
+
+        // Evitar duplicados
+        if(pedidosAlimentos.find(x => x.id == p.id)) return;
+        
+        pedidosAlimentos.push(p);
+        localStorage.setItem('p_cocina_alimentos', JSON.stringify(pedidosAlimentos));
+        
+        dibujarTicket(p);
+        document.getElementById('snd-nuevo').play().catch(e => {});
     });
+
+    // Actualizar folio en tiempo real desde despacho
     canal.subscribe('update-folio', (m) => {
-        const el = document.getElementById(`fol-${m.data.id}`); if(el) el.innerText = "#"+m.data.folio;
+        const { id, folio } = m.data;
+        const index = pedidosAlimentos.findIndex(x => x.id == id);
+        if(index !== -1) {
+            pedidosAlimentos[index].folio = folio;
+            localStorage.setItem('p_cocina_alimentos', JSON.stringify(pedidosAlimentos));
+        }
+        const el = document.getElementById(`fol-${id}`);
+        if(el) el.innerText = "#" + folio;
     });
-    function listo(id){
+
+    function dibujarTicket(p) {
+        const div = document.createElement('div');
+        div.id = `ticket-${p.id}`;
+        div.className = "ticket";
+        div.innerHTML = `
+            <div class="ticket-header">
+                <span class="fw-bold fs-4">FOLIO <span id="fol-${p.id}">${p.folio ? '#'+p.folio : '---'}</span></span>
+                <span id="timer-${p.id}" class="timer-badge">00:00</span>
+            </div>
+            <div class="p-3 flex-grow-1">
+                <div class="mb-3 d-flex align-items-center">
+                    <span class="tipo-badge ${p.presencial ? 'badge-local' : 'badge-domicilio'}">
+                        ${p.presencial ? 'LOCAL / MESA' : 'DOMICILIO'}
+                    </span>
+                    <span class="ms-2 fw-bold text-muted text-truncate">${p.nombre.toUpperCase()}</span>
+                </div>
+                <div class="pedido-detalle">${p.alimentos}</div>
+            </div>
+            <button class="btn-ready" onclick="finalizarOrden('${p.id}')">PEDIDO LISTO ✅</button>
+        `;
+        document.getElementById('lista-alimentos').appendChild(div);
+        iniciarCronometro(p.id, p.creado || p.id);
+    }
+
+    function iniciarCronometro(id, inicio) {
+        const interval = setInterval(() => {
+            const el = document.getElementById(`timer-${id}`);
+            if(!el) { clearInterval(interval); return; }
+            
+            const transcurrido = Date.now() - inicio;
+            const min = Math.floor(transcurrido / 60000);
+            const seg = Math.floor((transcurrido % 60000) / 1000);
+            el.innerText = `${min}:${seg < 10 ? '0'+seg : seg}`;
+            
+            // Semáforo visual de productividad
+            if(min >= 20 && min < 35) {
+                el.style.background = "#fff3cd"; // Naranja
+                el.style.color = "#856404";
+            } else if(min >= 35) {
+                el.style.background = "#f8d7da"; // Rojo
+                el.style.color = "#721c24";
+            }
+        }, 1000);
+    }
+
+    function finalizarOrden(id) {
+        // Notificar a despacho que Alimentos terminó
         canal.publish('cocina-lista', { id: id, area: "Alimentos" });
-        document.getElementById('t-'+id).remove();
+
+        // Limpiar pantalla y memoria
+        pedidosAlimentos = pedidosAlimentos.filter(x => x.id != id);
+        localStorage.setItem('p_cocina_alimentos', JSON.stringify(pedidosAlimentos));
+        document.getElementById(`ticket-${id}`).remove();
     }
 </script>
 </body>
