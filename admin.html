@@ -2,53 +2,161 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Cocina - Dash Food</title>
+    <title>KDS - Pantalla de Cocina</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
-    <style>body{background:#000;color:#fff;}.order-box{background:#111;border:2px solid #333;border-radius:15px;margin-bottom:15px;}.comida-txt{font-size:2rem;color:#ffeb3b;font-weight:bold;}</style>
+    <style>
+        :root { --bg-dark: #0a0a0a; --card-bg: #1a1a1a; --text-main: #ffffff; --accent: #ff9800; }
+        body { background: var(--bg-dark); color: var(--text-main); font-family: 'Segoe UI', sans-serif; overflow-x: hidden; }
+        
+        /* Contenedor de Tickets Activos */
+        .ticket-container { display: flex; overflow-x: auto; gap: 20px; padding: 20px; min-height: 450px; scrollbar-width: thin; }
+        
+        /* Ticket de Cocina Estilo Profesional */
+        .ticket { 
+            background: #fff; color: #000; min-width: 320px; max-width: 320px; 
+            border-radius: 4px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            display: flex; flex-direction: column; position: relative;
+        }
+        .ticket-header { background: #333; color: #fff; padding: 10px; display: flex; justify-content: space-between; align-items: center; }
+        .ticket-body { padding: 15px; flex-grow: 1; }
+        .ticket-footer { padding: 10px; background: #f8f9fa; border-top: 2px dashed #ccc; }
+        
+        .pedido-detalle { font-size: 1.8rem; font-weight: 800; line-height: 1.2; text-transform: uppercase; color: #d32f2f; }
+        .notas-ticket { background: #fff9c4; padding: 8px; border-radius: 4px; font-weight: bold; margin-top: 10px; border-left: 4px solid #fbc02d; }
+
+        /* Historial Inferior */
+        .historial-seccion { background: #111; border-top: 2px solid #333; padding: 20px; margin-top: 20px; }
+        .historial-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+        .historial-item { background: #222; padding: 10px; border-radius: 8px; border: 1px solid #444; font-size: 0.85rem; }
+
+        .btn-ready { background: #2e7d32; color: white; border: none; padding: 15px; width: 100%; font-weight: bold; font-size: 1.2rem; }
+        .btn-prep { background: #ff9800; color: white; border: none; padding: 10px; width: 100%; font-weight: bold; margin-bottom: 5px; }
+        
+        /* Animación de Pedido Nuevo */
+        .nuevo-ticket { animation: flash 1s infinite alternate; }
+        @keyframes flash { from { box-shadow: 0 0 5px #ff9800; } to { box-shadow: 0 0 20px #ff9800; } }
+    </style>
 </head>
-<body class="p-3">
-    <h2 class="fw-bold mb-4">👨‍🍳 COCINA</h2>
-    <div id="lista-cocina"></div>
-    <audio id="snd" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"></audio>
+<body>
+
+    <div class="container-fluid p-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h1 class="fw-bold m-0"><span style="color: var(--accent);">●</span> PEDIDOS ACTIVOS</h1>
+            <div id="reloj" class="fs-4 fw-bold text-white-50">00:00:00</div>
+        </div>
+
+        <div id="lista-cocina" class="ticket-container">
+            </div>
+
+        <div class="historial-seccion">
+            <h5 class="text-white-50 fw-bold mb-3">🕒 RECIÉN TERMINADOS (HISTORIAL)</h5>
+            <div id="historial-cocina" class="historial-grid">
+                </div>
+        </div>
+    </div>
+
+    <audio id="snd-nuevo" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"></audio>
 
     <script>
         const ably = new Ably.Realtime('DTn3Xw.LRKcmg:kyc7qhpjvAETzWfzWTVNnLerapobqPaCivYdBVk97OA');
         const canal = ably.channels.get('pedidos-dash');
 
-        let pedidos = JSON.parse(localStorage.getItem('p_cocina')) || [];
-        pedidos.forEach(p => dibujar(p));
+        let activos = JSON.parse(localStorage.getItem('p_cocina_activos')) || [];
+        let historial = JSON.parse(localStorage.getItem('p_cocina_historial')) || [];
 
+        // Inicializar vistas
+        activos.forEach(p => dibujarTicket(p));
+        historial.forEach(p => dibujarHistorial(p));
+
+        // Reloj en vivo
+        setInterval(() => {
+            document.getElementById('reloj').innerText = new Date().toLocaleTimeString();
+        }, 1000);
+
+        // ESCUCHAR PEDIDOS NUEVOS
         canal.subscribe('nuevo', (msg) => {
             const p = msg.data;
-            if(pedidos.find(x => x.id == p.id)) return;
-            pedidos.push(p);
-            localStorage.setItem('p_cocina', JSON.stringify(pedidos));
-            dibujar(p);
-            document.getElementById('snd').play();
+            if(activos.find(x => x.id == p.id)) return;
+            
+            activos.push(p);
+            localStorage.setItem('p_cocina_activos', JSON.stringify(activos));
+            dibujarTicket(p);
+            document.getElementById('snd-nuevo').play().catch(e => {});
         });
 
+        // ACTUALIZAR FOLIO CUANDO DESPACHO LO ASIGNE
         canal.subscribe('update-folio', (m) => {
-            const el = document.getElementById(`fol-${m.data.id}`);
-            if(el) el.innerText = "#" + m.data.folio;
+            const { id, folio } = m.data;
+            const index = activos.findIndex(x => x.id == id);
+            if(index !== -1) {
+                activos[index].folio = folio;
+                localStorage.setItem('p_cocina_activos', JSON.stringify(activos));
+            }
+            const el = document.getElementById(`fol-${id}`);
+            if(el) el.innerText = "#" + folio;
         });
 
-        function dibujar(p) {
+        function dibujarTicket(p) {
             const div = document.createElement('div');
-            div.id = `c-${p.id}`; div.className = "order-box p-3";
+            div.id = `ticket-${p.id}`;
+            div.className = "ticket nuevo-ticket";
             div.innerHTML = `
-                <div class="d-flex justify-content-between"><h4>FOLIO: <span id="fol-${p.id}" class="text-danger">---</span></h4></div>
-                <div class="comida-txt text-uppercase">${p.comida}</div>
-                <div class="mt-2"><button class="btn btn-warning w-100 mb-2" onclick="st('${p.id}','cocinando')">EMPEZAR COCINA</button>
-                <button class="btn btn-danger w-100" onclick="remover('${p.id}')">ENVIAR A DESPACHO</button></div>`;
-            document.getElementById('lista-cocina').prepend(div);
+                <div class="ticket-header">
+                    <span class="fw-bold">ORDEN <span id="fol-${p.id}">${p.folio ? '#'+p.folio : '---'}</span></span>
+                    <span class="small">${new Date(p.id).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
+                </div>
+                <div class="ticket-body">
+                    <div class="text-muted small mb-1">CLIENTE: ${p.nombre.toUpperCase()}</div>
+                    <div class="pedido-detalle">${p.comida}</div>
+                    ${p.notas ? `<div class="notas-ticket">⚠️ ${p.notas}</div>` : ''}
+                </div>
+                <div class="ticket-footer text-center">
+                    <button class="btn-prep rounded mb-2" onclick="notificarCocinando('${p.id}')">NOTIFICAR PREPARACIÓN</button>
+                    <button class="btn-ready rounded" onclick="terminarPedido('${p.id}')">PEDIDO LISTO ✅</button>
+                </div>
+            `;
+            document.getElementById('lista-cocina').appendChild(div);
         }
 
-        function st(id, s) { canal.publish('status-'+id, {estado: s}); }
-        function remover(id) {
-            pedidos = pedidos.filter(x => x.id != id);
-            localStorage.setItem('p_cocina', JSON.stringify(pedidos));
-            document.getElementById('c-'+id).remove();
+        function notificarCocinando(id) {
+            canal.publish('status-' + id, { estado: 'cocinando' });
+            const ticket = document.getElementById(`ticket-${id}`);
+            ticket.classList.remove('nuevo-ticket');
+            ticket.style.borderTop = "10px solid #ff9800";
+        }
+
+        function terminarPedido(id) {
+            const pedido = activos.find(x => x.id == id);
+            if(!pedido) return;
+
+            // Mover a historial
+            historial.unshift(pedido);
+            if(historial.length > 8) historial.pop(); // Solo guardar los últimos 8 en historial visual
+            localStorage.setItem('p_cocina_historial', JSON.stringify(historial));
+
+            // Quitar de activos
+            activos = activos.filter(x => x.id != id);
+            localStorage.setItem('p_cocina_activos', JSON.stringify(activos));
+
+            // Actualizar interfaz
+            document.getElementById(`ticket-${id}`).remove();
+            dibujarHistorial(pedido);
+        }
+
+        function dibujarHistorial(p) {
+            const container = document.getElementById('historial-cocina');
+            const div = document.createElement('div');
+            div.className = "historial-item";
+            div.innerHTML = `
+                <div class="d-flex justify-content-between">
+                    <b class="text-success">#${p.folio || 'SN'}</b>
+                    <span class="text-white-50">${p.nombre}</span>
+                </div>
+                <div class="text-truncate">${p.comida}</div>
+            `;
+            container.prepend(div);
+            if(container.children.length > 8) container.lastChild.remove();
         }
     </script>
 </body>
