@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Despacho - Dash Food</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
+    <style>
+        body { background: #f8f9fa; font-family: sans-serif; }
+        .pedido-card { background: white; border-radius: 12px; border-left: 5px solid #ffc107; padding: 15px; margin-bottom: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body class="p-4">
+    <h2 class="fw-bold mb-4">📋 Administrador de Despacho</h2>
+    <div class="row">
+        <div class="col-md-8">
+            <h5 class="text-muted">Pedidos por asignar:</h5>
+            <div id="lista-despacho"></div>
+        </div>
+        <div class="col-md-4">
+            <div class="card p-3 shadow-sm">
+                <h6 class="fw-bold">Repartidores Activos:</h6>
+                <div id="lista-repartidores-activos">
+                    <small class="text-muted">Esperando señales...</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const ably = new Ably.Realtime('DTn3Xw.LRKcmg:kyc7qhpjvAETzWfzWTVNnLerapobqPaCivYdBVk97OA');
+        const canal = ably.channels.get('pedidos-dash');
+
+        // Escuchar pedidos que vienen de Cocina
+        canal.subscribe('para-repartidor', (msg) => {
+            const p = msg.data;
+            const div = document.createElement('div');
+            div.id = `desp-${p.id}`;
+            div.className = "pedido-card d-flex justify-content-between align-items-center";
+            div.innerHTML = `
+                <div>
+                    <b>${p.nombre}</b> - ${p.comida}<br>
+                    <small>${p.direccion}</small>
+                </div>
+                <div>
+                    <select id="select-${p.id}" class="form-select form-select-sm mb-2">
+                        <option value="Juan">Asignar a Juan</option>
+                        <option value="Pedro">Asignar a Pedro</option>
+                        <option value="Miguel">Asignar a Miguel</option>
+                    </select>
+                    <button class="btn btn-primary btn-sm w-100" onclick="despachar('${p.id}', '${encodeURIComponent(JSON.stringify(p))}')">DESPACHAR</button>
+                </div>`;
+            document.getElementById('lista-despacho').prepend(div);
+        });
+
+        function despachar(id, pData) {
+            const pedido = JSON.parse(decodeURIComponent(pData));
+            const repartidorElegido = document.getElementById(`select-${id}`).value;
+            
+            // Enviamos señal específica para ESE repartidor
+            canal.publish('asignado-' + repartidorElegido, pedido);
+            
+            document.getElementById(`desp-${id}`).remove();
+            alert("Pedido asignado a " + repartidorElegido);
+        }
+    </script>
+</body>
+</html>
