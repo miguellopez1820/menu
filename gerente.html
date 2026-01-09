@@ -1,91 +1,35 @@
 <!DOCTYPE html>
-<html lang="es">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>Gerente - Dash Food</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
-    <style>
-        body { background: #f4f7f6; font-family: sans-serif; }
-        .repa-card { background: white; border-radius: 15px; border-top: 5px solid #0d6efd; padding: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
-        .monto { font-size: 2rem; font-weight: bold; color: #198754; }
-        .total-global { background: #000; color: #fff; padding: 20px; border-radius: 15px; }
-    </style>
 </head>
-<body class="p-4">
-    <div class="container">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h2 class="fw-bold">📊 Corte de Caja por Repartidor</h2>
-            <button class="btn btn-dark" onclick="location.reload()">REINICIAR CORTE</button>
-        </div>
-
-        <div class="total-global text-center mb-5">
-            <span class="text-white-50 small uppercase">VENTA TOTAL DEL DÍA</span>
-            <div class="display-3 fw-bold" id="venta-total">$0.00</div>
-        </div>
-
-        <div id="repartidores-grid" class="row g-4 mb-5">
-            </div>
-
-        <div class="card p-4 border-0 shadow-sm">
-            <h4 class="fw-bold mb-3">📜 Historial de Entregas Realizadas</h4>
-            <div class="table-responsive">
-                <table class="table table-hover">
-                    <thead><tr><th>Hora</th><th>Repartidor</th><th>Pedido</th><th>Monto</th></tr></thead>
-                    <tbody id="historial-ventas"></tbody>
-                </table>
-            </div>
-        </div>
-    </div>
+<body class="p-4 bg-light">
+    <h2 class="fw-bold">Corte de Caja</h2>
+    <div id="repartidores" class="row mb-4"></div>
+    <table class="table bg-white rounded shadow-sm">
+        <thead><tr><th>Hora</th><th>Repartidor</th><th>Monto</th></tr></thead>
+        <tbody id="historial"></tbody>
+    </table>
 
     <script>
         const ably = new Ably.Realtime('DTn3Xw.LRKcmg:kyc7qhpjvAETzWfzWTVNnLerapobqPaCivYdBVk97OA');
         const canal = ably.channels.get('pedidos-dash');
-        
-        let globalTotal = 0;
-        let repartidoresData = {}; // Guardaremos { "Juan": 500, "Pedro": 300 }
+        let saldos = {};
 
         canal.subscribe('para-gerente', (msg) => {
             const p = msg.data;
-            const repa = p.repartidor || "Sin Nombre";
-            const monto = Number(p.total) || 0;
-            const hora = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+            const repa = p.repartidor;
+            saldos[repa] = (saldos[repa] || 0) + p.total;
+            
+            // Dibujar saldos
+            let html = "";
+            for(let r in saldos) html += `<div class="col-md-3"><div class="card p-3"><b>${r}</b><br><span class="h4 text-success">$${saldos[r]}</span></div></div>`;
+            document.getElementById('repartidores').innerHTML = html;
 
-            // 1. Sumar al Total Global
-            globalTotal += monto;
-            document.getElementById('venta-total').innerText = `$${globalTotal.toLocaleString()}.00`;
-
-            // 2. Sumar al repartidor específico
-            if(!repartidoresData[repa]) {
-                repartidoresData[repa] = 0;
-                crearTarjetaRepartidor(repa);
-            }
-            repartidoresData[repa] += monto;
-            document.getElementById(`monto-${repa}`).innerText = `$${repartidoresData[repa]}.00`;
-
-            // 3. Agregar al historial
-            const fila = `<tr>
-                <td><span class="badge bg-light text-dark">${hora}</span></td>
-                <td><b class="text-primary">${repa}</b></td>
-                <td>${p.comida}</td>
-                <td class="fw-bold text-success">$${monto}</td>
-            </tr>`;
-            document.getElementById('historial-ventas').innerHTML = fila + document.getElementById('historial-ventas').innerHTML;
+            const fila = `<tr><td>${new Date().toLocaleTimeString()}</td><td>${repa}</td><td>$${p.total}</td></tr>`;
+            document.getElementById('historial').innerHTML = fila + document.getElementById('historial').innerHTML;
         });
-
-        function crearTarjetaRepartidor(nombre) {
-            const grid = document.getElementById('repartidores-grid');
-            const col = document.createElement('div');
-            col.className = 'col-md-4';
-            col.innerHTML = `
-                <div class="repa-card text-center">
-                    <span class="text-muted small fw-bold">REPARTIDOR</span>
-                    <h3 class="fw-bold text-uppercase">${nombre}</h3>
-                    <div class="monto" id="monto-${nombre}">$0.00</div>
-                    <small class="text-muted">Efectivo en mano</small>
-                </div>`;
-            grid.appendChild(col);
-        }
     </script>
 </body>
 </html>
