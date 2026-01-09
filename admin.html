@@ -2,131 +2,88 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dash Food - Menú</title>
+    <title>KDS Cocina</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
     <style>
-        :root { --main: #06C167; }
-        body { background: #f8f9fa; font-family: 'Segoe UI', sans-serif; padding-bottom: 200px; }
-        .product-card { background: #fff; border-radius: 15px; padding: 12px; margin-bottom: 8px; border: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
-        .btn-qty { width: 32px; height: 32px; border-radius: 8px; border: 1px solid #ddd; background: #fff; font-weight: bold; }
-        .cart-footer { background: #fff; position: fixed; bottom: 0; width: 100%; max-width: 500px; padding: 20px; box-shadow: 0 -5px 20px rgba(0,0,0,0.1); border-radius: 25px 25px 0 0; left: 50%; transform: translateX(-50%); z-index: 100; }
-        .btn-confirm { background: var(--main); color: #fff; border: none; border-radius: 12px; padding: 15px; width: 100%; font-weight: bold; }
-        .step { padding-left: 35px; margin-bottom: 15px; position: relative; color: #ccc; }
-        .step.active { color: #000; font-weight: bold; }
-        .dot { position: absolute; left: 0; width: 22px; height: 22px; background: #eee; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; }
-        .active .dot { background: var(--main); color: white; }
+        body { background: #000; color: #fff; }
+        .ticket-container { display: flex; gap: 20px; padding: 20px; overflow-x: auto; }
+        .ticket { background: #fff; color: #000; min-width: 300px; border-radius: 8px; border-top: 10px solid #333; }
+        .pedido-txt { font-size: 1.8rem; font-weight: 800; color: #d32f2f; }
+        .timer-badge { font-family: monospace; font-size: 1.2rem; padding: 4px 10px; border-radius: 5px; font-weight: bold; }
     </style>
 </head>
-<body class="d-flex justify-content-center">
-    <div style="width: 100%; max-width: 500px;">
-        <div id="pantalla-menu">
-            <div class="p-4 bg-dark text-white text-center rounded-bottom shadow">
-                <h2 class="fw-bold mb-0">Dash Food 🍔</h2>
-                <div class="badge bg-success mt-2 p-2">⏳ Entrega: <span id="tiempo-promo">45 - 55</span> MIN</div>
-            </div>
-            <div id="contenedor-menu" class="p-3"></div>
-            <div class="p-3 bg-white mx-3 rounded-4 shadow-sm mb-3">
-                <input type="text" id="nombre" class="form-control mb-2" placeholder="Tu nombre">
-                <textarea id="direccion" class="form-control mb-3" placeholder="Dirección completa"></textarea>
-                <h6 class="fw-bold">Método de Pago:</h6>
-                <div class="d-flex gap-2">
-                    <input type="radio" class="btn-check" name="pago" id="p_ef" value="Efectivo" checked>
-                    <label class="btn btn-outline-dark w-100" for="p_ef">💵 Efectivo</label>
-                    <input type="radio" class="btn-check" name="pago" id="p_tar" value="Tarjeta">
-                    <label class="btn btn-outline-dark w-100" for="p_tar">💳 Tarjeta</label>
-                </div>
-            </div>
-            <div class="cart-footer">
-                <div id="desglose" class="small text-muted mb-1 text-center"></div>
-                <div class="d-flex justify-content-between mb-3 px-1"><b>Total:</b> <b id="total-txt" class="text-success fs-5">$0.00</b></div>
-                <button id="btn-ordenar" onclick="enviarPedido()" class="btn-confirm shadow">ORDENAR AHORA</button>
-            </div>
-        </div>
-
-        <div id="pantalla-tracking" class="p-4 d-none text-center">
-            <div class="alert alert-success border-0 shadow-sm mb-4 rounded-4">
-                <h6 class="mb-1 opacity-75">Tiempo estimado:</h6>
-                <h3 class="fw-bold m-0"><span id="t-final-tracking">45-55</span> MIN</h3>
-            </div>
-            <h2 class="fw-bold">Orden #<span id="folio-display">--</span></h2>
-            <div class="text-start mt-4 px-3">
-                <div id="st-1" class="step active"><div class="dot">1</div> Recibido ✅</div>
-                <div id="st-2" class="step"><div class="dot">2</div> En Cocina 🔥</div>
-                <div id="st-3" class="step"><div class="dot">3</div> En Camino 🛵</div>
-                <div id="st-4" class="step"><div class="dot">4</div> Entregado 🏁</div>
-            </div>
-            <a href="https://wa.me/523316275115" target="_blank" class="btn btn-outline-success w-100 mt-4 py-3 fw-bold rounded-4">Ayuda WhatsApp 💬</a>
-        </div>
+<body>
+    <div class="p-3 bg-dark d-flex justify-content-between align-items-center border-bottom border-warning">
+        <h2 class="fw-bold text-warning m-0">👨‍🍳 COCINA KDS</h2>
+        <div id="reloj" class="fs-4">00:00:00</div>
     </div>
+    <div id="lista-cocina" class="ticket-container"></div>
+    <hr class="border-secondary">
+    <div class="p-3"><h6 class="text-white-50">HISTORIAL DE SALIDAS (RECIENTES)</h6><div id="hist-cocina" class="d-flex gap-2"></div></div>
+    <audio id="snd" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"></audio>
 
 <script>
     const ably = new Ably.Realtime('DTn3Xw.LRKcmg:kyc7qhpjvAETzWfzWTVNnLerapobqPaCivYdBVk97OA');
     const canal = ably.channels.get('pedidos-dash');
+    let activos = JSON.parse(localStorage.getItem('p_cocina')) || [];
 
-    const menuData = [
-        { cat: "Especialidades", items: [{id:"h1", nom:"Hawaiana", pre:135}, {id:"h2", nom:"BBQ Mango", pre:160}, {id:"h3", nom:"Mexicana", pre:145}]}
-    ];
+    activos.forEach(p => dibujar(p));
+    setInterval(() => { document.getElementById('reloj').innerText = new Date().toLocaleTimeString(); }, 1000);
 
-    let carrito = {}; let total = 0; let envio = 15;
-    const cont = document.getElementById('contenedor-menu');
-    menuData.forEach(s => {
-        cont.innerHTML += `<div class="badge bg-dark mb-2 text-uppercase">${s.cat}</div>`;
-        s.items.forEach(p => {
-            cont.innerHTML += `<div class="product-card"><div><b>${p.nom}</b><br><small>$${p.pre}</small></div><div class="d-flex align-items-center gap-2"><button class="btn-qty" onclick="updateQty('${p.id}',-1,${p.pre},'${p.nom}')">-</button><b id="q-${p.id}">0</b><button class="btn-qty" onclick="updateQty('${p.id}',1,${p.pre},'${p.nom}')">+</button></div></div>`;
-        });
+    canal.subscribe('nuevo', (msg) => {
+        const p = msg.data; if(activos.find(x => x.id == p.id)) return;
+        activos.push(p); localStorage.setItem('p_cocina', JSON.stringify(activos));
+        dibujar(p); document.getElementById('snd').play();
     });
 
-    function updateQty(id, ch, pr, nom) {
-        if(!carrito[id]) carrito[id] = { cant: 0, nom: nom, pr: pr };
-        carrito[id].cant = Math.max(0, carrito[id].cant + ch);
-        document.getElementById('q-'+id).innerText = carrito[id].cant;
-        let sub = 0; for(let k in carrito) sub += (carrito[k].cant * carrito[k].pr);
-        if(sub > 0) {
-            total = sub + envio;
-            document.getElementById('desglose').innerText = `Subtotal: $${sub} + Envío: $${envio}`;
-            document.getElementById('total-txt').innerText = `$${total}.00`;
-        } else { total = 0; document.getElementById('desglose').innerText = ""; document.getElementById('total-txt').innerText = `$0.00`; }
-    }
-
-    canal.subscribe('ajuste-tiempo', (m) => {
-        const txt = `${m.data.min} - ${m.data.max}`;
-        document.getElementById('tiempo-promo').innerText = txt;
-        document.getElementById('t-final-tracking').innerText = txt;
+    canal.subscribe('update-folio', (m) => {
+        const el = document.getElementById(`fol-${m.data.id}`);
+        if(el) el.innerText = "#" + m.data.folio;
     });
 
-    const saved = JSON.parse(localStorage.getItem('current_order'));
-    if(saved) {
-        document.getElementById('pantalla-menu').classList.add('d-none');
-        document.getElementById('pantalla-tracking').classList.remove('d-none');
-        escucharStatus(saved.id);
+    function dibujar(p) {
+        const div = document.createElement('div');
+        div.id = `ticket-${p.id}`; div.className = "ticket shadow-lg";
+        div.innerHTML = `
+            <div class="p-2 d-flex justify-content-between align-items-center border-bottom">
+                <span>FOLIO <b id="fol-${p.id}">---</b></span>
+                <span id="t-${p.id}" class="timer-badge bg-light">00:00</span>
+            </div>
+            <div class="p-3">
+                <div class="pedido-txt uppercase">${p.comida}</div>
+                <div class="small fw-bold mt-2">PAGO: ${p.pago}</div>
+                ${p.pago === 'Tarjeta' ? '<div class="badge bg-primary w-100 fs-6 mt-1">💳 LLEVAR TERMINAL</div>' : ''}
+                <hr>
+                <button class="btn btn-warning w-100 fw-bold" onclick="st('${p.id}','cocinando')">COCINAR 🔥</button>
+                <button class="btn btn-success w-100 mt-2 fw-bold" onclick="remover('${p.id}')">PEDIDO LISTO ✅</button>
+            </div>`;
+        document.getElementById('lista-cocina').prepend(div);
+        iniciarT(p.id, p.creado);
     }
 
-    function enviarPedido() {
-        const nom = document.getElementById('nombre').value;
-        const dir = document.getElementById('direccion').value;
-        const pago = document.querySelector('input[name="pago"]:checked').value;
-        if(!nom || !dir || total === 0) return alert("Faltan datos");
-        document.getElementById('btn-ordenar').disabled = true;
-
-        navigator.geolocation.getCurrentPosition((pos) => {
-            const id = Date.now();
-            let lista = ""; for(let k in carrito) if(carrito[k].cant > 0) lista += `${carrito[k].cant}x ${carrito[k].nom}, `;
-            const data = { id, creado: id, nombre: nom, total, comida: lista, direccion: dir, pago, gps: `https://www.google.com/maps?q=${pos.coords.latitude},${pos.coords.longitude}` };
-            localStorage.setItem('current_order', JSON.stringify(data));
-            canal.publish('nuevo', data, () => { location.reload(); });
-        });
+    function iniciarT(id, inicio) {
+        const interval = setInterval(() => {
+            const el = document.getElementById(`t-${id}`);
+            if(!el) { clearInterval(interval); return; }
+            const min = Math.floor((Date.now() - inicio) / 60000);
+            const seg = Math.floor(((Date.now() - inicio) % 60000) / 1000);
+            el.innerText = `${min}:${seg < 10 ? '0'+seg : seg}`;
+            if(min < 20) el.className = "timer-badge bg-success text-white";
+            else if(min < 35) el.className = "timer-badge bg-warning text-dark";
+            else el.className = "timer-badge bg-danger text-white";
+        }, 1000);
     }
 
-    function escucharStatus(id) {
-        canal.subscribe('status-' + id, (m) => {
-            const s = m.data;
-            if(s.folio) document.getElementById('folio-display').innerText = s.folio;
-            if(s.estado === 'cocinando') document.getElementById('st-2').classList.add('active');
-            if(s.estado === 'camino') { document.getElementById('st-2').classList.add('active'); document.getElementById('st-3').classList.add('active'); }
-            if(s.estado === 'entregado') { document.getElementById('st-4').classList.add('active'); localStorage.removeItem('current_order'); }
-        });
+    function st(id, s) { canal.publish('status-'+id, {estado: s}); }
+    function remover(id) {
+        const p = activos.find(x => x.id == id);
+        const div = document.createElement('div'); div.className = "badge bg-secondary p-2";
+        div.innerText = `#${p.folio || 'SN'} - ${p.comida}`;
+        document.getElementById('hist-cocina').prepend(div);
+        activos = activos.filter(x => x.id != id);
+        localStorage.setItem('p_cocina', JSON.stringify(activos));
+        document.getElementById('ticket-'+id).remove();
     }
 </script>
 </body>
