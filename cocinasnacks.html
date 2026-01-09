@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KDS - Cocina Snacks</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
+    <style>
+        :root { --accent: #ffc107; --bg: #0a0a0a; }
+        body { background: var(--bg); color: #fff; font-family: 'Segoe UI', sans-serif; }
+        .ticket-container { display: flex; overflow-x: auto; gap: 20px; padding: 20px; min-height: 80vh; }
+        
+        .ticket { 
+            background: #fff; color: #000; min-width: 320px; max-width: 320px; 
+            border-radius: 8px; display: flex; flex-direction: column;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.5); border-top: 12px solid var(--accent);
+        }
+        .ticket-header { background: #333; color: #fff; padding: 10px; display: flex; justify-content: space-between; align-items: center; }
+        .pedido-detalle { font-size: 2rem; font-weight: 900; line-height: 1.1; color: #000; text-transform: uppercase; white-space: pre-wrap; }
+        
+        .timer-badge { font-family: monospace; font-size: 1.2rem; background: #eee; padding: 4px 8px; border-radius: 5px; color: #000; }
+        .btn-ready { background: var(--accent); color: #000; border: none; padding: 15px; width: 100%; font-weight: bold; font-size: 1.3rem; border-radius: 0 0 8px 8px; }
+        
+        .badge-presencial { background: #000; color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; }
+    </style>
+</head>
+<body>
+
+    <div class="p-3 d-flex justify-content-between align-items-center bg-dark border-bottom border-warning">
+        <h2 class="fw-bold m-0 text-warning">🍿 COCINA: SNACKS Y POSTRES</h2>
+        <div id="reloj" class="fs-4 fw-bold">00:00:00</div>
+    </div>
+
+    <div id="lista-snacks" class="ticket-container">
+        </div>
+
+    <audio id="snd-nuevo" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"></audio>
+
+<script>
+    const ably = new Ably.Realtime('DTn3Xw.LRKcmg:kyc7qhpjvAETzWfzWTVNnLerapobqPaCivYdBVk97OA');
+    const canal = ably.channels.get('pedidos-dash');
+
+    // Recuperar pendientes de snacks de la memoria local
+    let pendientes = JSON.parse(localStorage.getItem('p_cocina_snacks')) || [];
+    pendientes.forEach(p => dibujarTicket(p));
+
+    // Reloj
+    setInterval(() => { document.getElementById('reloj').innerText = new Date().toLocaleTimeString(); }, 1000);
+
+    // Escuchar pedidos nuevos
+    canal.subscribe('nuevo', (msg) => {
+        const p = msg.data;
+        // FILTRO: Si el pedido no trae nada del área de Snacks, lo ignora
+        if(!p.snacks || p.snacks.trim() === "") return;
+
+        if(pendientes.find(x => x.id == p.id)) return;
+        pendientes.push(p);
+        localStorage.setItem('p_cocina_snacks', JSON.stringify(pendientes));
+        
+        dibujarTicket(p);
+        document.getElementById('snd-nuevo').play().catch(e => {});
+    });
+
+    // Actualizar folio cuando Despacho lo asigne
+    canal.subscribe('update-folio', (m) => {
+        const { id, folio } = m.data;
+        const index = pendientes.findIndex(x => x.id == id);
+        if(index !== -1) {
+            pendientes[index].folio = folio;
+            localStorage.setItem('p_cocina_snacks', JSON.stringify(pendientes));
+        }
+        const el = document.getElementById(`fol-${id}`);
+        if(el) el.innerText = "#" + folio;
+    });
+
+    function dibujarTicket(p) {
+        const div = document.createElement('div');
+        div.id = `ticket-${p.id}`;
+        div.className = "ticket";
+        div.innerHTML = `
+            <div class="ticket-header">
+                <span class="fw-bold">SNACKS <span id="fol-${p.id}">${p.folio ? '#'+p.folio : '---'}</span></span>
+                <span id="timer-${p.id}" class="timer-badge">00:00</span>
+            </div>
+            <div class="p-3 flex-grow-1">
+                <div class="mb-2">
+                    ${p.presencial ? '<span class="badge-presencial">ORDEN LOCAL</span>' : '<span class="badge bg-light text-dark border">DOMICILIO</span>'}
+                    <span class="ms-2 fw-bold text-muted">${p.nombre.toUpperCase()}</span>
+                </div>
+                <div class="pedido-detalle">${p.snacks}</div>
+                ${p.notas ? `<div class="mt-2 p-2 bg-light border-start border-4 border-warning small"><b>NOTAS:</b> ${p.notas}</div>` : ''}
+            </div>
+            <button class="btn-ready" onclick="finalizarSnack('${p.id}')">SNACKS LISTOS ✅</button>
+        `;
+        document.getElementById('lista-snacks').appendChild(div);
+        iniciarTimer(p.id, p.creado || p.id);
+    }
+
+    function iniciarTimer(id, inicio) {
+        const interval = setInterval(() => {
+            const el = document.getElementById(`timer-${id}`);
+            if(!el) { clearInterval(interval); return; }
+            const min = Math.floor((Date.now() - inicio) / 60000);
+            const seg = Math.floor(((Date.now() - inicio) % 60000) / 1000);
+            el.innerText = `${min}:${seg < 10 ? '0'+seg : seg}`;
+            
+            // Color de urgencia
+            if(min >= 15) el.style.background = "#ffcc00";
+            if(min >= 25) el.style.background = "#ff3b30"; el.style.color = "#fff";
+        }, 1000);
+    }
+
+    function finalizarSnack(id) {
+        // 1. Notificar a Despacho
+        canal.publish('cocina-lista', { id: id, area: "Snacks" });
+
+        // 2. Limpiar memoria y pantalla
+        pendientes = pendientes.filter(x => x.id != id);
+        localStorage.setItem('p_cocina_snacks', JSON.stringify(pendientes));
+        document.getElementById(`ticket-${id}`).remove();
+    }
+</script>
+</body>
+</html>
