@@ -7,63 +7,87 @@
     <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
     <style>
         body { background: #f0f2f5; font-family: sans-serif; }
-        .card-stats { border-radius: 15px; border: none; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
-        .total-dinero { font-size: 2.5rem; font-weight: bold; color: #28a745; }
+        .card-stats { border-radius: 15px; border: none; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .total-dinero { font-size: 3rem; font-weight: bold; color: #198754; }
+        .status-reparto { font-size: 0.9rem; border-left: 4px solid #0d6efd; padding-left: 10px; }
     </style>
 </head>
 <body class="p-4">
     <div class="container">
-        <h2 class="fw-bold mb-4">💰 Control de Ventas</h2>
+        <h2 class="fw-bold mb-4">💰 Dashboard de Administración</h2>
         
-        <div class="row mb-4">
+        <div class="row">
             <div class="col-md-4">
-                <div class="card card-stats p-4 text-center">
-                    <span class="text-muted small fw-bold">VENTAS DE HOY</span>
+                <div class="card card-stats p-4 text-center bg-white">
+                    <span class="text-muted small fw-bold uppercase">VENTAS ACUMULADAS HOY</span>
                     <div class="total-dinero" id="total">$0.00</div>
-                    <span id="cant-pedidos" class="badge bg-secondary">0 pedidos</span>
+                    <span id="cant-pedidos" class="badge bg-dark fs-6 mt-2">0 pedidos confirmados</span>
                 </div>
             </div>
             <div class="col-md-8">
-                <div class="card card-stats p-4">
-                    <h5 class="fw-bold">📍 Rastreo de Entregas</h5>
-                    <div id="rastreo" class="small">Esperando envíos...</div>
+                <div class="card card-stats p-4 bg-white">
+                    <h5 class="fw-bold"><span class="text-primary">🛵</span> Rastreo de Entregas Activas</h5>
+                    <div id="rastreo" class="mt-3">
+                        <p class="text-muted">No hay repartidores en ruta actualmente.</p>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <div class="card card-stats p-4">
-            <h5 class="fw-bold mb-3">📜 Historial Detallado</h5>
-            <table class="table">
-                <thead><tr><th>Hora</th><th>Cliente</th><th>Pedido</th><th>Monto</th></tr></thead>
-                <tbody id="tabla-ventas"></tbody>
-            </table>
+        <div class="card card-stats p-4 bg-white">
+            <h5 class="fw-bold mb-3">📜 Registro de Ventas</h5>
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Hora</th>
+                            <th>Cliente</th>
+                            <th>Productos</th>
+                            <th>Total Pagado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabla-ventas">
+                        </tbody>
+                </table>
+            </div>
         </div>
     </div>
 
     <script>
         const ably = new Ably.Realtime('DTn3Xw.LRKcmg:kyc7qhpjvAETzWfzWTVNnLerapobqPaCivYdBVk97OA');
         const canal = ably.channels.get('pedidos-dash');
-        let total = 0;
-        let count = 0;
+        let totalDinero = 0;
+        let totalPedidos = 0;
 
         canal.subscribe('para-gerente', (msg) => {
             const p = msg.data;
             const hora = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
             
-            // Extraer precio del texto (ej: "Hamburguesa - $120")
-            const precio = parseInt(p.comida.split('$')[1]) || 0;
-            total += precio;
-            count++;
+            // Sumar el total que envió el cliente
+            const monto = parseFloat(p.total) || 0;
+            totalDinero += monto;
+            totalPedidos++;
 
-            document.getElementById('total').innerText = `$${total}.00`;
-            document.getElementById('cant-pedidos').innerText = `${count} pedidos`;
+            // Actualizar indicadores superiores
+            document.getElementById('total').innerText = `$${totalDinero.toLocaleString('es-MX', {minimumFractionDigits: 2})}`;
+            document.getElementById('cant-pedidos').innerText = `${totalPedidos} pedidos confirmados`;
 
-            // Agregar a la tabla
-            const fila = `<tr><td>${hora}</td><td>${p.nombre}</td><td>${p.comida}</td><td class="text-success fw-bold">$${precio}</td></tr>`;
+            // Actualizar tabla de historial
+            const fila = `
+                <tr>
+                    <td><span class="badge bg-light text-dark border">${hora}</span></td>
+                    <td class="fw-bold">${p.nombre}</td>
+                    <td>${p.comida}</td>
+                    <td class="text-success fw-bold">$${monto.toFixed(2)}</td>
+                </tr>`;
             document.getElementById('tabla-ventas').innerHTML = fila + document.getElementById('tabla-ventas').innerHTML;
 
-            // Actualizar rastro
-            document.getElementById('rastreo').innerHTML = `<div class="alert alert-info">🛵 <b>${p.nombre}</b> está en camino a su domicilio.</div>`;
+            // Actualizar rastro en vivo
+            document.getElementById('rastreo').innerHTML = `
+                <div class="status-reparto alert alert-primary mb-2">
+                    <b>EN RUTA:</b> ${p.nombre} está esperando su pedido de <b>${p.comida}</b>. 
+                    <br><small class="text-muted">Salida a las ${hora}</small>
+                </div>`;
         });
     </script>
 </body>
