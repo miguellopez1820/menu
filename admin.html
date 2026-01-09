@@ -2,64 +2,122 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reparto Dash</title>
+    <title>COCINA - Dash Food</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
     <style>
-        body { background: #002e26; color: white; }
-        .card-entrega { background: #fff; color: #000; border-radius: 15px; margin-bottom: 15px; border: 3px solid #06C167; }
-        .btn-gps { background: #06C167; color: #fff; font-weight: bold; }
+        body { background: #000; color: #fff; font-family: 'Segoe UI', sans-serif; }
+        .card-pedido { background: #111; border: 2px solid #333; border-radius: 15px; overflow: hidden; margin-bottom: 20px; }
+        .barra-titulo { background: #222; padding: 10px; border-bottom: 2px solid #444; }
+        .nombre-cliente { color: #00e5ff; font-size: 1.4rem; font-weight: bold; }
+        /* Texto de orden extra grande para evitar errores en cocina */
+        .orden-texto { color: #fff; font-size: 2rem; line-height: 1.1; margin: 15px 0; } 
+        .caja-notas { background: #332b00; border: 1px solid #ffd700; color: #ffd700; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 1.1rem; }
+        .caja-direccion { background: #002b36; border: 1px solid #00e5ff; color: #00e5ff; padding: 10px; border-radius: 8px; font-weight: bold; margin-top: 10px; }
+        .btn-accion { font-weight: bold; padding: 15px; border-radius: 10px; font-size: 1.2rem; text-transform: uppercase; }
+        .badge-nuevo { animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
     </style>
 </head>
 <body class="p-3">
-    <div id="login-repartidor" class="text-center py-5">
-        <h2 class="fw-bold">Identificación</h2>
-        <input type="text" id="nombre-repartidor" class="form-control mb-3" placeholder="Tu Nombre (Ej: Juan)">
-        <button class="btn btn-success w-100" onclick="iniciarSesion()">ENTRAR A REPARTO</button>
+    <div class="container-fluid">
+        <h2 class="fw-bold mb-4 d-flex align-items-center">
+            👨‍🍳 PEDIDOS EN CURSO 
+            <span id="count" class="badge bg-danger ms-3">0</span>
+        </h2>
+        
+        <div id="lista-cocina" class="row g-4">
+            </div>
     </div>
 
-    <div id="app-reparto" class="d-none">
-        <h2 class="text-center fw-bold mb-4">🛵 MIS ENTREGAS</h2>
-        <div id="lista-reparto"></div>
-    </div>
+    <audio id="alarma" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"></audio>
 
     <script>
+        // Configuración de Ably
         const ably = new Ably.Realtime('DTn3Xw.LRKcmg:kyc7qhpjvAETzWfzWTVNnLerapobqPaCivYdBVk97OA');
         const canal = ably.channels.get('pedidos-dash');
-        let repartidorActual = "";
+        const audio = document.getElementById('alarma');
 
-        function iniciarSesion() {
-            repartidorActual = document.getElementById('nombre-repartidor').value;
-            if(!repartidorActual) return alert("Pon tu nombre");
-            document.getElementById('login-repartidor').classList.add('d-none');
-            document.getElementById('app-reparto').classList.remove('d-none');
-        }
-
-        canal.subscribe('para-repartidor', (msg) => {
+        // Escuchar nuevos pedidos del cliente
+        canal.subscribe('nuevo', (msg) => {
             const p = msg.data;
-            const card = document.createElement('div');
-            card.id = `rep-${p.id}`;
-            card.innerHTML = `
-                <div class="card card-entrega p-3 shadow">
-                    <h3 class="fw-bold">${p.nombre}</h3>
-                    <p class="fs-5 mb-1">🏠 <b>Dirección:</b> ${p.direccion}</p>
-                    <p class="text-muted mb-2">💰 <b>COBRAR: $${p.total}</b></p>
-                    <a href="${p.gps}" target="_blank" class="btn btn-gps w-100 p-3 mb-2">ABRIR MAPA 📍</a>
-                    <button class="btn btn-danger w-100 fw-bold" onclick="confirmarEntrega('${p.id}', '${encodeURIComponent(JSON.stringify(p))}')">CONFIRMAR ENTREGA Y COBRO ✅</button>
+            
+            // Intentar reproducir sonido (requiere interacción previa con la página)
+            audio.play().catch(e => console.log("Permiso de audio requerido"));
+            
+            const div = document.createElement('div');
+            div.className = 'col-md-6 col-lg-4';
+            div.id = `ped-${p.id}`;
+            div.innerHTML = `
+                <div class="card card-pedido shadow-lg">
+                    <div class="barra-titulo d-flex justify-content-between align-items-center">
+                        <span class="nombre-cliente">${p.nombre}</span>
+                        <span class="badge bg-warning text-dark badge-nuevo">NUEVO</span>
+                    </div>
+                    <div class="p-3">
+                        <p class="orden-texto text-warning">
+                            <strong>${p.comida}</strong>
+                        </p>
+                        
+                        <div class="caja-notas mb-2">
+                            <small class="text-white-50 d-block">NOTAS ESPECIALES:</small>
+                            ${p.notas || 'SIN ESPECIFICACIONES'}
+                        </div>
+
+                        <div class="caja-direccion">
+                            <small class="text-white-50 d-block">ENTREGAR EN:</small>
+                            ${p.direccion}
+                        </div>
+
+                        <div class="d-flex gap-2 mt-4">
+                            <button class="btn btn-warning btn-accion w-100" onclick="notificarCliente('${p.id}', 'cocinando')">
+                                🔥 PREPARAR
+                            </button>
+                            <button class="btn btn-primary btn-accion w-100" onclick="enviarARepartidor('${p.id}', '${encodeURIComponent(JSON.stringify(p))}')">
+                                🛵 ENVIAR
+                            </button>
+                        </div>
+                    </div>
                 </div>`;
-            document.getElementById('lista-reparto').prepend(card);
+            
+            document.getElementById('lista-cocina').prepend(div);
+            actualizarContador(1);
         });
 
-        function confirmarEntrega(id, pData) {
+        // Notifica al cliente que su comida se está cocinando
+        function notificarCliente(id, estado) {
+            canal.publish('status-' + id, { estado: estado });
+            // Opcional: Cambiar visualmente la tarjeta para saber que ya se está haciendo
+            const card = document.getElementById(`ped-${id}`);
+            if(card) card.style.borderColor = "#ffc107";
+        }
+        
+        // Envía el pedido al panel del repartidor
+        function enviarARepartidor(id, pData) {
             const pedido = JSON.parse(decodeURIComponent(pData));
-            pedido.repartidor = repartidorActual; // Agregamos quién lo entregó
             
-            // Enviamos al gerente para que sume el dinero
-            canal.publish('para-gerente', pedido);
+            // 1. Notificar al cliente que ya va en camino
+            canal.publish('status-' + id, { estado: 'camino' });
             
-            document.getElementById(`rep-${id}`).remove();
-            alert("Venta registrada con éxito");
+            // 2. Enviar datos completos al panel de REPARTO.HTML
+            canal.publish('para-repartidor', pedido); 
+            
+            // 3. Quitar de la pantalla de cocina
+            const elemento = document.getElementById(`ped-${id}`);
+            if(elemento) {
+                elemento.style.transition = "0.5s";
+                elemento.style.opacity = "0";
+                setTimeout(() => {
+                    elemento.remove();
+                    actualizarContador(-1);
+                }, 500);
+            }
+        }
+
+        function actualizarContador(n) {
+            const b = document.getElementById('count');
+            let actual = parseInt(b.innerText) + n;
+            b.innerText = actual > 0 ? actual : 0;
         }
     </script>
 </body>
