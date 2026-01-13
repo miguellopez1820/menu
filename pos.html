@@ -2,158 +2,51 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>POS - Caja Registradora</title>
+    <title>POS Caja</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
-    <style>
-        body { background: #f0f2f5; height: 100vh; display: flex; overflow: hidden; font-family: sans-serif; }
-        .menu-panel { flex: 1; padding: 20px; overflow-y: auto; }
-        .cart-panel { width: 400px; background: white; border-left: 2px solid #ddd; display: flex; flex-direction: column; box-shadow: -5px 0 15px rgba(0,0,0,0.05); }
-        .btn-item { height: 90px; font-weight: bold; border-radius: 12px; border: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: 0.2s; background: white; color: #333; }
-        .btn-item:active { transform: scale(0.95); }
-        .cart-items { flex-grow: 1; overflow-y: auto; padding: 15px; }
-        .total-section { padding: 20px; border-top: 2px solid #eee; background: #fafafa; }
-        /* Modal de Folio */
-        #modal-folio { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: none; align-items: center; justify-content: center; z-index: 2000; }
-        .folio-card { background: white; padding: 40px; border-radius: 20px; text-align: center; max-width: 300px; }
-    </style>
 </head>
-<body>
-
-    <div class="menu-panel">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h2 class="fw-bold m-0">🛒 Punto de Venta</h2>
-            <div class="badge bg-dark p-2">Sincronizado con Cocinas y Despacho</div>
-        </div>
-        <div class="row g-3" id="grid-menu">
-            </div>
-    </div>
-
-    <div class="cart-panel">
-        <div class="p-3 bg-dark text-white fw-bold text-center">TICKET DE VENTA</div>
-        <div class="cart-items" id="lista-ticket">
-            <p class="text-muted text-center mt-5">Agregue productos al ticket...</p>
-        </div>
-        
-        <div class="total-section">
-            <input type="text" id="cliente-nom" class="form-control mb-2 fw-bold" placeholder="Nombre del Cliente / Mesa">
-            <select id="metodo-pago" class="form-select mb-3 fw-bold">
-                <option value="Efectivo">💵 Efectivo</option>
-                <option value="Tarjeta">💳 Tarjeta / Terminal</option>
-            </select>
-            <div class="d-flex justify-content-between h3 fw-bold text-success mb-3">
-                <span>TOTAL:</span>
-                <span id="total-val">$0.00</span>
-            </div>
-            <button class="btn btn-success w-100 py-3 fw-bold fs-4" onclick="mandarPedido()">ENVIAR A COCINA 🔥</button>
-            <button class="btn btn-outline-danger w-100 mt-2 btn-sm" onclick="cancelarTodo()">Limpiar Ticket</button>
-        </div>
-    </div>
-
-    <div id="modal-folio">
-        <div class="folio-card shadow-lg animate__animated animate__zoomIn">
-            <h5 class="text-muted">FOLIO ASIGNADO</h5>
-            <h1 class="display-1 fw-bold text-success" id="folio-numero">--</h1>
-            <p class="mb-4">Pedido enviado correctamente a cocinas.</p>
-            <button class="btn btn-dark w-100 py-2" onclick="cerrarFolio()">ACEPTAR Y LIMPIAR</button>
-        </div>
+<body class="p-4 bg-dark text-white">
+    <div style="max-width: 400px; margin: auto;">
+        <h3>🛒 CAJA POS</h3>
+        <input type="text" id="cli" class="form-control mb-2" placeholder="Nombre Cliente">
+        <textarea id="ped" class="form-control mb-3" placeholder="Pedido (Escribe o usa botones)"></textarea>
+        <button class="btn btn-success w-100 py-3 fw-bold" onclick="mandar()">ENVIAR A COCINA</button>
+        <h1 id="folio-view" class="text-center mt-4 text-warning"></h1>
     </div>
 
 <script>
     const ably = new Ably.Realtime('DTn3Xw.LRKcmg:kyc7qhpjvAETzWfzWTVNnLerapobqPaCivYdBVk97OA');
-    const canal = ably.channels.get('pedidos-menu');
+    const canal = ably.channels.get('canal-operativo-menu');
+    let miIdActual = 0;
 
-    const productos = [
-        { id: "h1", nom: "Hawaiana", pre: 135, area: "Alimentos", color: "#ffebee" },
-        { id: "h2", nom: "BBQ Doble", pre: 155, area: "Alimentos", color: "#ffebee" },
-        { id: "t1", nom: "Orden Tacos", pre: 120, area: "Alimentos", color: "#ffebee" },
-        { id: "a1", nom: "Alitas 10pz", pre: 160, area: "Snacks", color: "#fff8e1" },
-        { id: "b1", nom: "Bionico", pre: 65, area: "Snacks", color: "#fff8e1" },
-        { id: "p1", nom: "Papas Fritas", pre: 55, area: "Snacks", color: "#fff8e1" }
-    ];
-
-    let cart = []; let total = 0; let ultimoIdEnviado = 0;
-
-    // Pintar Menú
-    const grid = document.getElementById('grid-menu');
-    productos.forEach(p => {
-        grid.innerHTML += `
-            <div class="col-md-4 col-lg-3">
-                <button class="btn-item w-100 shadow-sm" style="border-bottom: 5px solid ${p.area=='Alimentos'?'#d32f2f':'#ffc107'}" onclick="addToCart('${p.id}')">
-                    ${p.nom}<br><span class="text-success">$${p.pre}</span>
-                </button>
-            </div>`;
-    });
-
-    function addToCart(id) {
-        const p = productos.find(x => x.id === id);
-        cart.push({...p, tempId: Date.now()});
-        renderCart();
-    }
-
-    function renderCart() {
-        const list = document.getElementById('lista-ticket');
-        list.innerHTML = ""; total = 0;
-        cart.forEach((item, idx) => {
-            total += item.pre;
-            list.innerHTML += `
-                <div class="d-flex justify-content-between align-items-center mb-2 p-2 border-bottom">
-                    <div><b>1 x ${item.nom}</b><br><small class="text-muted">${item.area}</small></div>
-                    <div><b>$${item.pre}</b> <span class="text-danger ms-2" style="cursor:pointer" onclick="removeItem(${idx})">✕</span></div>
-                </div>`;
-        });
-        document.getElementById('total-val').innerText = `$${total}.00`;
-    }
-
-    function removeItem(idx) { cart.splice(idx, 1); renderCart(); }
-    function cancelarTodo() { if(confirm("¿Limpiar ticket?")) { cart = []; renderCart(); } }
-
-    function mandarPedido() {
-        const cliente = document.getElementById('cliente-nom').value;
-        if(!cliente || cart.length === 0) return alert("Ingrese nombre de cliente y productos.");
-
-        let alim = ""; let snk = "";
-        cart.forEach(p => {
-            if(p.area === "Alimentos") alim += `1 x ${p.nom}\n`;
-            else snk += `1 x ${p.nom}\n`;
-        });
-
-        const id = Date.now();
-        ultimoIdEnviado = id; // Clave para reconocer el folio que regrese
-
-        const data = {
-            id, creado: id, nombre: "(LOCAL) " + cliente,
-            total: total, alimentos: alim, snacks: snk,
-            pago: document.getElementById('metodo-pago').value,
-            direccion: "SERVICIO EN LOCAL",
-            presencial: true
+    function mandar() {
+        const cli = document.getElementById('cli').value;
+        const ped = document.getElementById('ped').value;
+        if(!cli || !ped) return alert("Falta info");
+        
+        miIdActual = Date.now();
+        const data = { 
+            id: miIdActual, 
+            nombre: cli, 
+            alimentos: ped, // Aquí puedes separar por área si gustas
+            presencial: true 
         };
 
-        canal.publish('nuevo', data, () => {
-            console.log("Pedido enviado, esperando folio...");
-            // Cambiamos el botón para indicar espera
-            document.querySelector('.btn-success').innerText = "ESPERANDO FOLIO...";
-            document.querySelector('.btn-success').disabled = true;
+        canal.publish('nuevo-pedido', data, () => {
+            document.getElementById('folio-view').innerText = "ESPERANDO...";
         });
     }
 
-    // EL DETALLE QUE FALTABA: ESCUCHAR EL FOLIO ASIGNADO
-    canal.subscribe('update-folio', (m) => {
-        if(m.data.id == ultimoIdEnviado) {
-            document.getElementById('folio-numero').innerText = m.data.folio;
-            document.getElementById('modal-folio').style.display = 'flex';
+    // ESCUCHAR EL FOLIO QUE REGRESA DESPACHO
+    canal.subscribe('folio-asignado', (m) => {
+        if(m.data.id == miIdActual) {
+            document.getElementById('folio-view').innerText = "FOLIO: #" + m.data.folio;
+            alert("Pedido enviado! Folio: #" + m.data.folio);
+            document.getElementById('cli').value = "";
+            document.getElementById('ped').value = "";
         }
     });
-
-    function cerrarFolio() {
-        document.getElementById('modal-folio').style.display = 'none';
-        document.getElementById('cliente-nom').value = "";
-        document.querySelector('.btn-success').innerText = "ENVIAR A COCINA 🔥";
-        document.querySelector('.btn-success').disabled = false;
-        cart = [];
-        renderCart();
-    }
 </script>
 </body>
 </html>
