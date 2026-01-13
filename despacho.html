@@ -2,14 +2,18 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Despacho Maestro - Blindado</title>
+    <title>Despacho Central</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
+    <style>
+        body { background: #f4f7f6; font-family: sans-serif; }
+        .pedido-card { background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-left: 8px solid #0d6efd; }
+    </style>
 </head>
-<body class="bg-light p-4">
+<body class="p-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="fw-bold">📦 MONITOR DE DESPACHO</h2>
-        <div id="status-conexion" class="badge bg-success">CONECTADO</div>
+        <h2>📦 MONITOR DE DESPACHO</h2>
+        <div id="bolsas-repas" class="d-flex gap-2"></div>
     </div>
     <div id="lista" class="row g-3"></div>
 
@@ -17,54 +21,69 @@
     const ably = new Ably.Realtime({ key: 'DTn3Xw.LRKcmg:kyc7qhpjvAETzWfzWTVNnLerapobqPaCivYdBVk97OA', recover: true });
     const canal = ably.channels.get('canal-operativo-menu');
     
-    // CARGA INICIAL ANTI-REFRESCO
-    let pedidosActivos = JSON.parse(localStorage.getItem('p_activos_despacho')) || [];
+    let pedidosActivos = JSON.parse(localStorage.getItem('p_despacho')) || [];
     let folioContador = parseInt(localStorage.getItem('f_num')) || 1;
+    let estadosBolsa = {};
 
-    // Dibujar lo que ya estaba en memoria
-    pedidosActivos.forEach(p => dibujarPedido(p));
+    pedidosActivos.forEach(p => dibujar(p));
 
     canal.subscribe('nuevo-pedido', (m) => {
         const p = m.data;
-        if(pedidosActivos.find(x => x.id == p.id)) return; // Evita duplicados
-
+        if(pedidosActivos.find(x => x.id == p.id)) return;
         p.folio = folioContador++;
         localStorage.setItem('f_num', folioContador);
-
         pedidosActivos.push(p);
-        localStorage.setItem('p_activos_despacho', JSON.stringify(pedidosActivos));
-
+        localStorage.setItem('p_despacho', JSON.stringify(pedidosActivos));
         canal.publish('folio-asignado', { id: p.id, folio: p.folio });
-        dibujarPedido(p);
+        dibujar(p);
     });
 
-    function dibujarPedido(p) {
+    canal.subscribe('reporte-bolsa', (m) => {
+        estadosBolsa[m.data.chofer] = m.data.total;
+        renderBolsas();
+    });
+
+    function renderBolsas() {
+        const cont = document.getElementById('bolsas-repas');
+        cont.innerHTML = "";
+        for(let c in estadosBolsa) {
+            const alerta = estadosBolsa[c] >= 1500 ? 'bg-danger' : 'bg-dark';
+            cont.innerHTML += `<span class="badge ${alerta}">${c}: $${estadosBolsa[c]}</span>`;
+        }
+    }
+
+    function dibujar(p) {
         const div = document.createElement('div');
         div.id = `d-${p.id}`;
-        div.className = "col-md-4 mb-3";
+        div.className = "col-md-6 col-lg-4 mb-3";
         div.innerHTML = `
-            <div class="card p-3 shadow-sm border-primary">
-                <h4 class="fw-bold">#${p.folio} - ${p.nombre}</h4>
-                <pre style="font-size: 1.1rem; white-space: pre-wrap;">${p.alimentos || ''}${p.snacks || ''}</pre>
-                <div class="d-grid gap-2">
-                    <button class="btn btn-success" onclick="cambiarStatus('${p.id}', 'en camino')">🚚 EN CAMINO</button>
-                    <button class="btn btn-dark" onclick="finalizar('${p.id}')">ENTREGADO ✅</button>
-                </div>
+            <div class="pedido-card p-3">
+                <h4>#${p.folio} - ${p.nombre}</h4>
+                <div class="bg-light p-2 mb-2 small text-uppercase fw-bold">${p.alimentos || ''}${p.snacks || ''}</div>
+                <p class="small mb-2">${p.direccion || 'LOCAL'}</p>
+                ${p.presencial ? 
+                    `<button class="btn btn-dark w-100" onclick="finalizar('${p.id}')">ENTREGAR LOCAL ✅</button>` :
+                    `<select id="repa-${p.id}" class="form-select mb-2"><option value="Juan">Juan</option><option value="Pedro">Pedro</option></select>
+                     <button class="btn btn-primary w-100" onclick="enviarRuta('${p.id}')">ASIGNAR REPARTO</button>`
+                }
             </div>`;
         document.getElementById('lista').prepend(div);
     }
 
-    function cambiarStatus(id, estado) {
-        canal.publish('status-' + id, { estado: estado });
-        alert("Cliente notificado: " + estado);
+    function enviarRuta(id) {
+        const repa = document.getElementById('repa-'+id).value;
+        if(estadosBolsa[repa] >= 1500) return alert("REPARTIDOR BLOQUEADO: Debe regresar a dejar efectivo.");
+        const p = pedidosActivos.find(x => x.id == id);
+        canal.publish('asignado-' + repa, p);
+        canal.publish('status-' + id, { estado: 'en camino' });
+        finalizar(id);
     }
 
     function finalizar(id) {
-        // Notificamos al cliente para que su web se limpie pronto
-        canal.publish('status-' + id, { estado: 'entregado' });
-        
+        const p = pedidosActivos.find(x => x.id == id);
+        if(p.presencial) canal.publish('venta-finalizada', p);
         pedidosActivos = pedidosActivos.filter(x => x.id != id);
-        localStorage.setItem('p_activos_despacho', JSON.stringify(pedidosActivos));
+        localStorage.setItem('p_despacho', JSON.stringify(pedidosActivos));
         document.getElementById(`d-${id}`).remove();
     }
 </script>
