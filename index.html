@@ -8,115 +8,81 @@
     <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
     <style>
         :root { --main: #06C167; }
-        body { background: #f8f9fa; font-family: 'Segoe UI', sans-serif; padding-bottom: 180px; }
-        .product-card { background: white; border-radius: 15px; padding: 15px; margin-bottom: 10px; border: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
-        .btn-qty { border: none; background: #eee; font-weight: bold; color: var(--main); width: 30px; height: 30px; border-radius: 8px; }
-        .cart-footer { background: white; position: fixed; bottom: 0; width: 100%; max-width: 500px; padding: 20px; box-shadow: 0 -10px 30px rgba(0,0,0,0.1); border-radius: 30px 30px 0 0; left: 50%; transform: translateX(-50%); z-index: 1000; }
-        .btn-order { background: var(--main); color: white; border: none; border-radius: 15px; padding: 15px; width: 100%; font-weight: bold; }
-        .d-none { display: none !important; }
+        body { background: #f8f9fa; font-family: sans-serif; padding-bottom: 100px; }
+        .product-card { background: white; border-radius: 15px; padding: 15px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #eee; }
+        .btn-order { background: var(--main); color: white; border: none; border-radius: 15px; padding: 15px; width: 100%; font-weight: bold; position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); max-width: 460px; z-index: 1000; }
     </style>
 </head>
-<body class="d-flex justify-content-center">
-    <div style="width: 100%; max-width: 500px;">
-        <div id="pantalla-menu">
-            <div class="p-4 bg-dark text-white text-center rounded-bottom shadow">
-                <h2 class="fw-bold m-0">Dash Food 🍔</h2>
-            </div>
-            <div id="lista-productos" class="p-3"></div>
-            <div class="p-3">
-                <input type="text" id="nombre" class="form-control mb-2" placeholder="Tu Nombre">
-                <textarea id="direccion" class="form-control mb-2" placeholder="Dirección y referencias"></textarea>
-                <div class="d-flex gap-2 mb-3">
-                    <input type="radio" name="pago" id="p1" value="Efectivo" checked> Efectivo
-                    <input type="radio" name="pago" id="p2" value="Tarjeta"> Tarjeta
-                </div>
-            </div>
-            <div class="cart-footer">
-                <div class="d-flex justify-content-between mb-3 h5 fw-bold">
-                    <span>Total (+ envío):</span>
-                    <span id="total-txt" class="text-success">$0.00</span>
-                </div>
-                <button id="btn-ordenar" onclick="enviarPedido()" class="btn-order shadow">REALIZAR PEDIDO</button>
-            </div>
-        </div>
+<body class="p-3">
+    <div id="pantalla-menu" style="max-width: 500px; margin: auto;">
+        <h2 class="fw-bold text-center mb-4">Dash Food 🍔</h2>
+        <div id="lista-productos"></div>
+        <hr>
+        <input type="text" id="nombre" class="form-control mb-2" placeholder="Tu Nombre">
+        <textarea id="direccion" class="form-control mb-2" placeholder="Dirección completa"></textarea>
+        <button onclick="prepararEnvio()" id="btn-ordenar" class="btn-order shadow">REALIZAR PEDIDO</button>
+    </div>
 
-        <div id="pantalla-tracking" class="p-4 d-none text-center">
-            <h1 class="fw-bold mt-5">Pedido <span id="folio-display" class="text-success">...</span></h1>
-            <p class="text-muted">Estado: <b id="status-txt">Recibido ✅</b></p>
-            <div class="alert alert-info mt-4">No cierres esta ventana para ver el progreso.</div>
-        </div>
+    <div id="pantalla-tracking" class="text-center d-none" style="padding-top: 100px;">
+        <h1 class="display-1 text-success">✅</h1>
+        <h2 class="fw-bold">Pedido <span id="folio-display">#...</span></h2>
+        <p class="h4">Estado: <b id="status-txt" class="text-primary">RECIBIDO</b></p>
+        <p class="text-muted mt-5">Esta pantalla se limpiará automáticamente al terminar.</p>
     </div>
 
 <script>
-    const ably = new Ably.Realtime('DTn3Xw.LRKcmg:kyc7qhpjvAETzWfzWTVNnLerapobqPaCivYdBVk97OA');
-    const canal = ably.channels.get('pedidos-menu');
+    const ably = new Ably.Realtime({ key: 'DTn3Xw.LRKcmg:kyc7qhpjvAETzWfzWTVNnLerapobqPaCivYdBVk97OA' });
+    const canal = ably.channels.get('canal-operativo-menu');
 
     const productos = [
         {id:"h1", nom:"Hamburguesa", pre:135, area:"Alimentos"},
-        {id:"a1", nom:"Alitas BBQ", pre:160, area:"Snacks"},
-        {id:"b1", nom:"Bionico", pre:65, area:"Snacks"}
+        {id:"a1", nom:"Alitas BBQ", pre:160, area:"Snacks"}
     ];
 
-    let carrito = {}; let totalVenta = 0;
-
-    const cont = document.getElementById('lista-productos');
-    productos.forEach(p => {
-        cont.innerHTML += `
-            <div class="product-card shadow-sm">
-                <div><b>${p.nom}</b><br><small>$${p.pre}</small></div>
-                <div class="d-flex align-items-center gap-2">
-                    <button class="btn-qty" onclick="sumar('${p.id}', -1)">-</button>
-                    <b id="qty-${p.id}">0</b>
-                    <button class="btn-qty" onclick="sumar('${p.id}', 1)">+</button>
-                </div>
-            </div>`;
-    });
-
-    function sumar(id, cant) {
-        if(!carrito[id]) carrito[id] = { cant: 0, p: productos.find(x=>x.id==id) };
-        carrito[id].cant = Math.max(0, carrito[id].cant + cant);
-        document.getElementById('qty-'+id).innerText = carrito[id].cant;
-        
-        let sub = 0; for(let k in carrito) sub += (carrito[k].cant * carrito[k].p.pre);
-        totalVenta = sub > 0 ? sub + 15 : 0;
-        document.getElementById('total-txt').innerText = `$${totalVenta}.00`;
-    }
-
-    function enviarPedido() {
+    function prepararEnvio() {
         const nom = document.getElementById('nombre').value;
         const dir = document.getElementById('direccion').value;
-        if(!nom || !dir || totalVenta == 0) return alert("Completa tus datos");
+        if(!nom || !dir) return alert("Datos incompletos");
 
-        let alim = ""; let snk = "";
-        for(let k in carrito) {
-            if(carrito[k].cant > 0) {
-                const l = `${carrito[k].cant} x ${carrito[k].p.nom}\n`;
-                if(carrito[k].p.area == "Alimentos") alim += l; else snk += l;
-            }
+        const idPedido = Date.now();
+        const datos = { id: idPedido, nombre: nom, direccion: dir, alimentos: "1x Hamburguesa\n", snacks: "" };
+
+        canal.publish('nuevo-pedido', datos, () => {
+            const sessionData = { pedido: datos, timestamp: Date.now() };
+            localStorage.setItem('current_order_session', JSON.stringify(sessionData));
+            location.reload();
+        });
+    }
+
+    // LÓGICA DE PERSISTENCIA Y CADUCIDAD
+    const session = JSON.parse(localStorage.getItem('current_order_session'));
+    if (session) {
+        const doceHoras = 12 * 60 * 60 * 1000;
+        if (Date.now() - session.timestamp > doceHoras) {
+            localStorage.removeItem('current_order_session');
+        } else {
+            document.getElementById('pantalla-menu').classList.add('d-none');
+            document.getElementById('pantalla-tracking').classList.remove('d-none');
+            
+            const saved = session.pedido;
+            canal.subscribe('folio-asignado', (m) => {
+                if(m.data.id == saved.id) document.getElementById('folio-display').innerText = "#" + m.data.folio;
+            });
+
+            canal.subscribe('status-' + saved.id, (m) => {
+                document.getElementById('status-txt').innerText = m.data.estado.toUpperCase();
+                // Si ya se entregó, limpiar memoria tras 10 minutos
+                if(m.data.estado === 'entregado') {
+                    setTimeout(() => { localStorage.removeItem('current_order_session'); }, 600000);
+                }
+            });
         }
-
-        const id = Date.now();
-        const data = { id, creado: id, nombre: nom, total: totalVenta, alimentos: alim, snacks: snk, direccion: dir, pago: document.querySelector('input[name="pago"]:checked').value };
-        
-        localStorage.setItem('current_order', JSON.stringify(data));
-        canal.publish('nuevo', data, () => { location.reload(); });
     }
 
-    // Escuchar actualizaciones (Folio y Status)
-    const saved = JSON.parse(localStorage.getItem('current_order'));
-    if(saved) {
-        document.getElementById('pantalla-menu').classList.add('d-none');
-        document.getElementById('pantalla-tracking').classList.remove('d-none');
-        
-        // Recibir folio desde Despacho
-        canal.subscribe('update-folio', (m) => {
-            if(m.data.id == saved.id) document.getElementById('folio-display').innerText = "#" + m.data.folio;
-        });
-
-        canal.subscribe('status-' + saved.id, (m) => {
-            document.getElementById('status-txt').innerText = m.data.estado.toUpperCase();
-        });
-    }
+    // Dibujar menú simple
+    productos.forEach(p => {
+        document.getElementById('lista-productos').innerHTML += `<div class="product-card"><b>${p.nom}</b> <span>$${p.pre}</span></div>`;
+    });
 </script>
 </body>
 </html>
