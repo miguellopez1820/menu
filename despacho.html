@@ -2,161 +2,38 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Despacho y Control de Folios</title>
+    <title>Despacho Central</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
-    <style>
-        body { background: #f4f7f6; font-family: sans-serif; }
-        .pedido-card { background: white; border-radius: 12px; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.1); transition: 0.3s; }
-        .area-badge { font-size: 0.75rem; padding: 4px 8px; border-radius: 5px; font-weight: bold; }
-        .bg-pendiente { background: #e0e0e0; color: #666; }
-        .bg-listo { background: #28a745; color: white; }
-        .folio-grande { font-size: 1.5rem; font-weight: 800; color: #000; }
-        .cronometro { font-family: monospace; font-weight: bold; font-size: 1.1rem; }
-    </style>
 </head>
-<body class="p-4">
-
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h2 class="fw-bold m-0">📦 Panel de Despacho</h2>
-            <p class="text-muted">Asignación automática de folios y control de rutas</p>
-        </div>
-        <div class="text-end">
-            <h5 class="m-0 text-primary">Siguiente Folio: <span id="prox-folio">--</span></h5>
-            <small class="text-muted">Este panel debe estar siempre abierto</small>
-        </div>
-    </div>
-
-    <div id="contenedor-pedidos" class="row g-3">
-        </div>
-
-    <audio id="snd-nuevo" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"></audio>
+<body class="bg-light p-4">
+    <h2 class="fw-bold">📦 MONITOR DE DESPACHO</h2>
+    <div id="lista" class="row g-3"></div>
 
 <script>
     const ably = new Ably.Realtime('DTn3Xw.LRKcmg:kyc7qhpjvAETzWfzWTVNnLerapobqPaCivYdBVk97OA');
-    const canal = ably.channels.get('pedidos-menu');
+    const canal = ably.channels.get('canal-operativo-menu');
+    let folioContador = parseInt(localStorage.getItem('f_num')) || 1;
 
-    // CONFIGURACIÓN DE FOLIOS (Blindado)
-    let folioContador = parseInt(localStorage.getItem('folio_cont')) || 100;
-    let pedidosActivos = JSON.parse(localStorage.getItem('p_despacho_activos')) || [];
+    canal.subscribe('nuevo-pedido', (m) => {
+        const p = m.data;
+        p.folio = folioContador++;
+        localStorage.setItem('f_num', folioContador);
 
-    // Al cargar, dibujar lo que estaba pendiente
-    actualizarProx();
-    pedidosActivos.forEach(p => dibujarPedido(p));
+        // AVISO GLOBAL DE FOLIO (Esto lo escuchan Web, POS y Cocinas)
+        canal.publish('folio-asignado', { id: p.id, folio: p.folio });
 
-    function actualizarProx() {
-        document.getElementById('prox-folio').innerText = "#" + folioContador;
-    }
-
-    // ESCUCHAR PEDIDOS NUEVOS (WEB Y POS)
-    canal.subscribe('nuevo', (msg) => {
-        const p = msg.data;
-        
-        // Evitar duplicados
-        if(pedidosActivos.find(x => x.id == p.id)) return;
-
-        // 1. ASIGNAR FOLIO REAL
-        p.folio = folioContador;
-        folioContador++;
-        localStorage.setItem('folio_cont', folioContador);
-        actualizarProx();
-
-        // 2. AVISAR A TODOS (Web y POS reciben su folio aquí)
-        canal.publish('update-folio', { id: p.id, folio: p.folio });
-
-        // 3. GUARDAR Y DIBUJAR
-        pedidosActivos.push(p);
-        localStorage.setItem('p_despacho_activos', JSON.stringify(pedidosActivos));
-        dibujarPedido(p);
-        document.getElementById('snd-nuevo').play().catch(e=>{});
-    });
-
-    // ESCUCHAR CUANDO UNA COCINA TERMINA
-    canal.subscribe('cocina-lista', (msg) => {
-        const { id, area } = msg.data;
-        const el = document.getElementById(`status-${area}-${id}`);
-        if(el) {
-            el.className = "area-badge bg-listo";
-            el.innerText = area + " LISTO ✅";
-        }
-        // Actualizar en memoria
-        let idx = pedidosActivos.findIndex(x => x.id == id);
-        if(idx !== -1) {
-            if(area === "Alimentos") pedidosActivos[idx].readyAlim = true;
-            else pedidosActivos[idx].readySnk = true;
-            localStorage.setItem('p_despacho_activos', JSON.stringify(pedidosActivos));
-        }
-    });
-
-    function dibujarPedido(p) {
         const div = document.createElement('div');
-        div.id = `card-${p.id}`;
-        div.className = "col-md-6 col-lg-4";
-        
-        const badgeAlim = p.alimentos ? `<span id="status-Alimentos-${p.id}" class="area-badge ${p.readyAlim?'bg-listo':'bg-pendiente'}">C1: Alimentos</span>` : '';
-        const badgeSnk = p.snacks ? `<span id="status-Snacks-${p.id}" class="area-badge ${p.readySnk?'bg-listo':'bg-pendiente'}">C2: Snacks</span>` : '';
-
+        div.id = `d-${p.id}`;
+        div.className = "col-md-4";
         div.innerHTML = `
-            <div class="pedido-card p-3">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <span class="folio-grande">#${p.folio}</span>
-                    <span id="cron-${p.id}" class="cronometro text-muted">00:00</span>
-                </div>
-                <div class="mb-2">
-                    <span class="badge ${p.presencial ? 'bg-dark' : 'bg-primary'} mb-1">${p.presencial ? 'LOCAL' : 'DOMICILIO'}</span>
-                    <strong class="d-block">${p.nombre}</strong>
-                </div>
-                <div class="bg-light p-2 rounded small mb-3" style="white-space: pre-wrap;">${p.alimentos}${p.snacks}</div>
-                <div class="d-flex gap-1 mb-3">${badgeAlim}${badgeSnk}</div>
-                
-                ${!p.presencial ? `
-                    <select id="repa-${p.id}" class="form-select form-select-sm mb-2">
-                        <option value="Juan">Juan</option>
-                        <option value="Pedro">Pedro</option>
-                    </select>
-                    <button class="btn btn-primary w-100 fw-bold" onclick="enviarARuta('${p.id}')">DESPACHAR A REPARTO</button>
-                ` : `
-                    <button class="btn btn-dark w-100 fw-bold" onclick="finalizarLocal('${p.id}')">ENTREGAR EN MESA / LOCAL</button>
-                `}
+            <div class="card p-3 shadow-sm border-primary">
+                <h4>#${p.folio} - ${p.nombre}</h4>
+                <div class="bg-light p-2 mb-2 small">${p.alimentos || ''}${p.snacks || ''}</div>
+                <button class="btn btn-primary w-100" onclick="this.parentElement.parentElement.remove()">LISTO / ENTREGADO</button>
             </div>`;
-        document.getElementById('contenedor-pedidos').prepend(div);
-        iniciarCronometro(p.id, p.creado);
-    }
-
-    function iniciarCronometro(id, inicio) {
-        setInterval(() => {
-            const el = document.getElementById(`cron-${id}`);
-            if(!el) return;
-            const min = Math.floor((Date.now() - inicio) / 60000);
-            const seg = Math.floor(((Date.now() - inicio) % 60000) / 1000);
-            el.innerText = `${min}:${seg < 10 ? '0'+seg : seg}`;
-            if(min >= 30) el.classList.add('text-danger');
-        }, 1000);
-    }
-
-    function enviarARuta(id) {
-        const p = pedidosActivos.find(x => x.id == id);
-        const r = document.getElementById('repa-'+id).value;
-        p.repartidor = r;
-        
-        canal.publish('asignado-' + r, p); // Envía al celular del repartidor
-        canal.publish('status-' + id, { estado: 'camino' }); // Avisa al cliente
-        
-        remover(id);
-    }
-
-    function finalizarLocal(id) {
-        const p = pedidosActivos.find(x => x.id == id);
-        canal.publish('para-gerente', p); // Manda la venta al historial
-        remover(id);
-    }
-
-    function remover(id) {
-        pedidosActivos = pedidosActivos.filter(x => x.id != id);
-        localStorage.setItem('p_despacho_activos', JSON.stringify(pedidosActivos));
-        document.getElementById(`card-${id}`).remove();
-    }
+        document.getElementById('lista').prepend(div);
+    });
 </script>
 </body>
 </html>
