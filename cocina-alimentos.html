@@ -2,69 +2,38 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Cocina Alimentos</title>
+    <title>Cocina</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
-    <style>
-        body { background: #000; color: #fff; font-family: sans-serif; }
-        .ticket-container { display: flex; overflow-x: auto; gap: 15px; padding: 15px; }
-        .ticket { background: #fff; color: #000; min-width: 300px; border-radius: 12px; border-top: 10px solid #d32f2f; animation: pulse 0.5s; }
-        @keyframes pulse { from { transform: scale(0.95); } to { transform: scale(1); } }
-        .pedido-txt { font-size: 2rem; font-weight: 900; color: #d32f2f; line-height: 1; }
-        .folio-box { font-size: 1.5rem; font-weight: bold; background: #eee; padding: 5px 10px; border-radius: 5px; }
-    </style>
 </head>
-<body class="p-3">
-    <h2 class="text-danger fw-bold mb-4">🔥 ÁREA DE ALIMENTOS</h2>
-    <div id="lista-cocina" class="ticket-container"></div>
-    <audio id="snd" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"></audio>
+<body class="bg-black text-white p-3">
+    <h2 class="text-danger">🔥 COCINA</h2>
+    <div id="lista" class="d-flex flex-wrap gap-3"></div>
 
 <script>
     const ably = new Ably.Realtime('DTn3Xw.LRKcmg:kyc7qhpjvAETzWfzWTVNnLerapobqPaCivYdBVk97OA');
-    const canal = ably.channels.get('pedidos-menu');
+    const canal = ably.channels.get('canal-operativo-menu');
 
-    // 1. ESCUCHAR PEDIDOS NUEVOS
-    canal.subscribe('nuevo', (m) => {
+    canal.subscribe('nuevo-pedido', (m) => {
         const p = m.data;
-        // Solo si trae comida de esta área
-        if(!p.alimentos || p.alimentos.trim() === "") return;
-        
-        dibujarTicket(p);
-        document.getElementById('snd').play().catch(e=>{});
-    });
-
-    // 2. ESCUCHAR ACTUALIZACIÓN DE FOLIO (Desde Despacho)
-    canal.subscribe('update-folio', (m) => {
-        const el = document.getElementById(`fol-${m.data.id}`);
-        if(el) {
-            el.innerText = "#" + m.data.folio;
-            el.classList.add('text-success'); // Se pone verde cuando llega el folio
-        }
-    });
-
-    function dibujarTicket(p) {
-        if(document.getElementById(`t-${p.id}`)) return; // No duplicar
+        if(!p.alimentos) return; // Filtro de área
 
         const div = document.createElement('div');
         div.id = `t-${p.id}`;
-        div.className = "ticket p-3";
+        div.className = "card p-3 text-dark";
+        div.style.width = "250px";
         div.innerHTML = `
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <span class="folio-box" id="fol-${p.id}">---</span>
-                <span class="badge bg-dark">${p.presencial ? 'LOCAL' : 'WEB'}</span>
-            </div>
-            <div class="pedido-txt text-uppercase mb-3">${p.alimentos}</div>
-            <div class="text-muted small">Cliente: ${p.nombre}</div>
-            <hr>
-            <button class="btn btn-danger w-100 fw-bold py-3" onclick="listo('${p.id}')">PEDIDO LISTO ✅</button>
+            <h5 id="fol-${p.id}">Folio: ---</h5>
+            <div class="fw-bold">${p.alimentos}</div>
+            <button class="btn btn-sm btn-danger mt-2" onclick="this.parentElement.remove()">LISTO</button>
         `;
-        document.getElementById('lista-cocina').prepend(div);
-    }
+        document.getElementById('lista').prepend(div);
+    });
 
-    function listo(id) {
-        canal.publish('cocina-lista', { id: id, area: "Alimentos" });
-        document.getElementById('t-'+id).remove();
-    }
+    canal.subscribe('folio-asignado', (m) => {
+        const el = document.getElementById(`fol-${m.data.id}`);
+        if(el) el.innerText = "Folio: #" + m.data.folio;
+    });
 </script>
 </body>
 </html>
