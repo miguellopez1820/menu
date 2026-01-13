@@ -6,29 +6,62 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
     <style>
-        body { background: #000; color: #fff; }
-        .ticket { background: #fff; color: #000; min-width: 320px; border-radius: 8px; margin: 10px; }
-        .pedido-txt { font-size: 2rem; font-weight: 900; color: #d32f2f; line-height: 1.1; }
+        body { background: #000; color: #fff; font-family: sans-serif; }
+        .ticket-container { display: flex; overflow-x: auto; gap: 15px; padding: 15px; }
+        .ticket { background: #fff; color: #000; min-width: 300px; border-radius: 12px; border-top: 10px solid #d32f2f; animation: pulse 0.5s; }
+        @keyframes pulse { from { transform: scale(0.95); } to { transform: scale(1); } }
+        .pedido-txt { font-size: 2rem; font-weight: 900; color: #d32f2f; line-height: 1; }
+        .folio-box { font-size: 1.5rem; font-weight: bold; background: #eee; padding: 5px 10px; border-radius: 5px; }
     </style>
 </head>
 <body class="p-3">
-    <h2 class="text-danger fw-bold">🔥 COCINA: ALIMENTOS</h2>
-    <div id="lista" class="d-flex overflow-auto"></div>
+    <h2 class="text-danger fw-bold mb-4">🔥 ÁREA DE ALIMENTOS</h2>
+    <div id="lista-cocina" class="ticket-container"></div>
+    <audio id="snd" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"></audio>
+
 <script>
     const ably = new Ably.Realtime('DTn3Xw.LRKcmg:kyc7qhpjvAETzWfzWTVNnLerapobqPaCivYdBVk97OA');
-    const canal = ably.channels.get('pedidos-dash');
+    const canal = ably.channels.get('pedidos-menu');
+
+    // 1. ESCUCHAR PEDIDOS NUEVOS
     canal.subscribe('nuevo', (m) => {
-        const p = m.data; if(!p.alimentos) return;
-        const div = document.createElement('div'); div.id = `t-${p.id}`; div.className = "ticket p-3 shadow";
-        div.innerHTML = `<h4 class="fw-bold">FOLIO <span id="fol-${p.id}">--</span></h4>
-        <div class="pedido-txt text-uppercase">${p.alimentos}</div><hr>
-        <button class="btn btn-success w-100 fw-bold" onclick="listo('${p.id}')">LISTO ✅</button>`;
-        document.getElementById('lista').prepend(div);
+        const p = m.data;
+        // Solo si trae comida de esta área
+        if(!p.alimentos || p.alimentos.trim() === "") return;
+        
+        dibujarTicket(p);
+        document.getElementById('snd').play().catch(e=>{});
     });
+
+    // 2. ESCUCHAR ACTUALIZACIÓN DE FOLIO (Desde Despacho)
     canal.subscribe('update-folio', (m) => {
-        const el = document.getElementById(`fol-${m.data.id}`); if(el) el.innerText = "#"+m.data.folio;
+        const el = document.getElementById(`fol-${m.data.id}`);
+        if(el) {
+            el.innerText = "#" + m.data.folio;
+            el.classList.add('text-success'); // Se pone verde cuando llega el folio
+        }
     });
-    function listo(id){
+
+    function dibujarTicket(p) {
+        if(document.getElementById(`t-${p.id}`)) return; // No duplicar
+
+        const div = document.createElement('div');
+        div.id = `t-${p.id}`;
+        div.className = "ticket p-3";
+        div.innerHTML = `
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <span class="folio-box" id="fol-${p.id}">---</span>
+                <span class="badge bg-dark">${p.presencial ? 'LOCAL' : 'WEB'}</span>
+            </div>
+            <div class="pedido-txt text-uppercase mb-3">${p.alimentos}</div>
+            <div class="text-muted small">Cliente: ${p.nombre}</div>
+            <hr>
+            <button class="btn btn-danger w-100 fw-bold py-3" onclick="listo('${p.id}')">PEDIDO LISTO ✅</button>
+        `;
+        document.getElementById('lista-cocina').prepend(div);
+    }
+
+    function listo(id) {
         canal.publish('cocina-lista', { id: id, area: "Alimentos" });
         document.getElementById('t-'+id).remove();
     }
