@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+a<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -89,7 +89,30 @@
             localStorage.clear();
             location.reload();
         }
+        <script>
+    // ... (Lógica de historial igual a la anterior)
+
+    // MONITOR GPS EN VIVO
+    canal.subscribe('posicion-repa', m => {
+        const { chofer, coords } = m.data;
+        document.getElementById(`gps-${chofer}`)?.remove();
+        const mapDiv = document.createElement('div');
+        mapDiv.id = `gps-${chofer}`;
+        mapDiv.className = "alert alert-primary py-2 d-flex justify-content-between align-items-center";
+        mapDiv.innerHTML = `
+            <span>📍 <b>${chofer}</b> está en movimiento</span>
+            <a href="https://www.google.com/maps?q=${coords}" target="_blank" class="btn btn-sm btn-light fw-bold">VER EN MAPA</a>
+        `;
+        document.getElementById('monitor-gps').prepend(mapDiv);
+    });
+</script>
+
+<div class="card p-3 mb-4">
+    <h5>🗺️ REPARTIDORES EN RUTA (GPS)</h5>
+    <div id="monitor-gps"></div>
+</div>
     }
 </script>
 </body>
 </html>
+
