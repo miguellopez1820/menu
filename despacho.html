@@ -2,99 +2,88 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Despacho Maestro | Taquería Leo</title>
+    <title>Despacho | Leo</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
     <style>
-        body { background: #f4f7f6; font-family: sans-serif; }
-        .pedido-card { background: white; border-radius: 12px; border-left: 8px solid #0d6efd; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .order-card { background: white; border-radius: 15px; border-left: 10px solid #0d6efd; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        .repa-pill { background: #1e293b; color: white; padding: 5px 12px; border-radius: 20px; font-size: 0.8rem; }
     </style>
 </head>
-<body class="p-4">
-    <div class="d-flex justify-content-between mb-4">
-        <h2 class="fw-bold">📦 Despacho Central</h2>
+<body class="bg-light p-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-bold m-0">📦 CENTRAL DE DESPACHO</h2>
         <div id="repa-monitor" class="d-flex gap-2"></div>
     </div>
     <div id="lista" class="row g-3"></div>
 
 <script>
-    const CLAVE_GERENTE = "LEO2026";
+    const CLAVE = "LEO2026";
     const ably = new Ably.Realtime({ key: 'DTn3Xw.LRKcmg:kyc7qhpjvAETzWfzWTVNnLerapobqPaCivYdBVk97OA' });
     const canal = ably.channels.get('canal-operativo-menu');
-    
-    let pedidos = JSON.parse(localStorage.getItem('d_activos')) || [];
+    let activos = JSON.parse(localStorage.getItem('d_activos')) || [];
     let folios = parseInt(localStorage.getItem('f_num')) || 1;
-    let saldosRepas = {};
+    let saldos = {};
 
-    pedidos.forEach(p => dibujar(p));
+    activos.forEach(p => dibujar(p));
 
-    canal.subscribe('nuevo-pedido', (m) => {
+    canal.subscribe('nuevo-pedido', m => {
         const p = m.data;
-        if(pedidos.find(x => x.id == p.id)) return;
+        if(activos.find(x => x.id == p.id)) return;
         p.folio = folios++;
         localStorage.setItem('f_num', folios);
-        pedidos.push(p);
-        save();
+        activos.push(p); save();
         canal.publish('folio-asignado', { id: p.id, folio: p.folio });
         dibujar(p);
     });
 
-    canal.subscribe('reporte-bolsa', m => { 
-        saldosRepas[m.data.chofer] = m.data.total; 
-        updateMonitor(); 
-    });
+    canal.subscribe('reporte-bolsa', m => { saldos[m.data.chofer] = m.data.total; updateRepas(); });
 
     function dibujar(p) {
-        const div = document.createElement('div');
-        div.id = `card-${p.id}`; div.className = "col-md-6 col-lg-4";
+        const div = document.createElement('div'); div.id = `c-${p.id}`; div.className = "col-md-6 col-lg-4";
         div.innerHTML = `
-            <div class="pedido-card p-3">
-                <div class="d-flex justify-content-between mb-2">
-                    <span class="h4 fw-bold">#${p.folio}</span>
-                    <span class="badge ${p.presencial?'bg-dark':'bg-primary'}">${p.presencial?'LOCAL':'DOMICILIO'}</span>
-                </div>
-                <div class="bg-light p-2 mb-2 fw-bold small text-uppercase">${p.alimentos}${p.snacks}</div>
+            <div class="order-card p-3">
+                <div class="d-flex justify-content-between mb-2"><span class="h4 fw-bold">#${p.folio}</span><span class="badge ${p.presencial?'bg-dark':'bg-primary'}">${p.presencial?'LOCAL':'DOM'}</span></div>
+                <div class="bg-light p-2 mb-2 fw-bold small">${p.alimentos}${p.snacks}</div>
+                <p class="small text-muted mb-3">📍 ${p.direccion}</p>
                 <div class="d-flex gap-2">
-                    ${p.presencial ? 
-                        `<button class="btn btn-success btn-sm w-100" onclick="finalizar('${p.id}','cobrado')">COBRAR</button>` :
-                        `<select id="sel-${p.id}" class="form-select form-select-sm"><option value="Juan">Juan</option><option value="Pedro">Pedro</option></select>
-                         <button class="btn btn-primary btn-sm" onclick="enviarRepa('${p.id}')">ENVIAR</button>`
-                    }
-                    <button class="btn btn-outline-danger btn-sm" onclick="solicitarCancelacion('${p.id}')">✕</button>
+                    ${p.presencial ? `<button class="btn btn-success btn-sm w-100" onclick="finalizar('${p.id}','cobrado')">COBRAR</button>` :
+                    `<select id="re-${p.id}" class="form-select form-select-sm"><option value="Juan">Juan</option><option value="Pedro">Pedro</option></select>
+                     <button class="btn btn-primary btn-sm" onclick="enviarRepa('${p.id}')">ENVIAR</button>`}
+                    <button class="btn btn-outline-danger btn-sm" onclick="cancelar('${p.id}')">✕</button>
                 </div>
             </div>`;
         document.getElementById('lista').prepend(div);
     }
 
-    function solicitarCancelacion(id) {
-        if(prompt("CLAVE DE GERENTE PARA CANCELAR:") === CLAVE_GERENTE) {
-            // GRITAR A TODOS QUE SE CANCELÓ
-            canal.publish('cancelar-global', { id: id });
+    function cancelar(id) {
+        if(prompt("CLAVE GERENTE:") === CLAVE) {
+            canal.publish('cancelar-global', { id });
             finalizar(id, 'cancelado');
-        } else { alert("Clave Incorrecta"); }
+        }
     }
 
     function enviarRepa(id) {
-        const repa = document.getElementById('sel-'+id).value;
-        if(saldosRepas[repa] >= 1500) return alert("Repartidor bloqueado por exceso de efectivo.");
-        const p = pedidos.find(x => x.id == id);
+        const repa = document.getElementById('re-'+id).value;
+        if(saldos[repa] >= 1500) return alert("Repartidor bloqueado por exceso de efectivo.");
+        const p = activos.find(x => x.id == id);
+        p.chofer_nombre = repa;
         canal.publish('asignado-' + repa, p);
-        finalizar(id, 'en ruta');
+        canal.publish('status-' + id, { estado: 'en camino' });
+        finalizar(id, 'despachado');
     }
 
     function finalizar(id, st) {
-        const p = pedidos.find(x => x.id == id);
+        const p = activos.find(x => x.id == id);
         p.status = st;
         canal.publish('registro-gerente', p);
-        pedidos = pedidos.filter(x => x.id != id);
-        save();
-        document.getElementById(`card-${id}`).remove();
+        activos = activos.filter(x => x.id != id); save();
+        document.getElementById(`c-${id}`).remove();
     }
-
-    function save() { localStorage.setItem('d_activos', JSON.stringify(pedidos)); }
-    function updateMonitor() {
+    function save() { localStorage.setItem('d_activos', JSON.stringify(activos)); }
+    function updateRepas() { 
         const m = document.getElementById('repa-monitor'); m.innerHTML = "";
-        for(let r in saldosRepas) m.innerHTML += `<span class="badge ${saldosRepas[r]>=1500?'bg-danger':'bg-dark'}">${r}: $${saldosRepas[r]}</span>`;
+        for(let r in saldos) m.innerHTML += `<span class="repa-pill ${saldos[r]>=1500?'bg-danger':''}">${r}: $${saldos[r]}</span>`;
     }
 </script>
 </body>
