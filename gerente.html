@@ -2,27 +2,31 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Gerencia | Leo</title>
+    <title>Gerencia | Taquería Leo</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
 </head>
 <body class="bg-dark text-white p-4">
     <div class="d-flex justify-content-between mb-4">
-        <h2>📊 CONTROL GERENCIAL</h2>
-        <button class="btn btn-danger" onclick="nuevoDia()">🌞 CORTE Y NUEVO DÍA</button>
+        <h2 class="fw-bold">📊 AUDITORÍA Y CORTE DIARIO</h2>
+        <button class="btn btn-danger fw-bold" onclick="nuevoDia()">🌞 INICIAR NUEVO DÍA (CORTE)</button>
     </div>
 
     <div class="row g-3 mb-4 text-dark text-center">
-        <div class="col-md-4"><div class="card p-3"><h6>Ventas Local</h6><h3 id="v-loc">$0</h3></div></div>
-        <div class="col-md-4"><div class="card p-3"><h6>Ventas Dom</h6><h3 id="v-dom">$0</h3></div></div>
-        <div class="col-md-4"><div class="card p-3 bg-warning"><h6>Cancelaciones</h6><h3 id="v-can">0</h3></div></div>
+        <div class="col-md-3"><div class="card p-3 bg-white"><h6>Venta Local</h6><h2 id="v-loc">$0</h2></div></div>
+        <div class="col-md-3"><div class="card p-3 bg-white"><h6>Venta Domicilio</h6><h2 id="v-dom">$0</h2></div></div>
+        <div class="col-md-3"><div class="card p-3 bg-warning"><h6>Cancelados</h6><h2 id="v-can">0</h2></div></div>
+        <div class="col-md-3"><div class="card p-3 bg-success text-white"><h6>CAJA TOTAL</h6><h2 id="v-total">$0</h2></div></div>
     </div>
 
-    <div class="card p-3 text-dark">
-        <h5>📍 Rastreo y Eficiencia</h5>
-        <div id="live-repas" class="mb-3"></div>
-        <table class="table">
-            <thead><tr><th>Folio</th><th>Chofer</th><th>Tiempo</th><th>Total</th></tr></thead>
+    <div class="card text-dark p-3">
+        <h5 class="fw-bold border-bottom pb-2">📍 RASTREO GPS Y TIEMPOS</h5>
+        <div id="live-repas" class="mb-3 d-flex gap-2 flex-wrap"></div>
+        
+        <table class="table table-sm table-hover mt-3">
+            <thead class="table-dark">
+                <tr><th>Folio</th><th>Hora</th><th>Tipo</th><th>Chofer</th><th>Tiempo Entrega</th><th>Total</th><th>Estatus</th></tr>
+            </thead>
             <tbody id="hist"></tbody>
         </table>
     </div>
@@ -30,33 +34,61 @@
 <script>
     const ably = new Ably.Realtime({ key: 'DTn3Xw.LRKcmg:kyc7qhpjvAETzWfzWTVNnLerapobqPaCivYdBVk97OA' });
     const canal = ably.channels.get('canal-operativo-menu');
-    let data = JSON.parse(localStorage.getItem('g_data')) || [];
+    let data = JSON.parse(localStorage.getItem('g_data_v2')) || [];
 
     actualizar();
 
-    canal.subscribe('registro-gerente', m => { data.push(m.data); localStorage.setItem('g_data', JSON.stringify(data)); actualizar(); });
-    
+    // ESCUCHAR TODAS LAS VENTAS (Vienen de POS o Reparto)
+    canal.subscribe('registro-gerente', m => {
+        data.push(m.data);
+        localStorage.setItem('g_data_v2', JSON.stringify(data));
+        actualizar();
+    });
+
+    // ESCUCHAR GPS
     canal.subscribe('posicion-repa', m => {
         const { chofer, coords } = m.data;
         document.getElementById(`gps-${chofer}`)?.remove();
-        document.getElementById('live-repas').innerHTML += `<div id="gps-${chofer}" class="badge bg-primary m-1">📍 ${chofer}: <a href="https://www.google.com/maps?q=${coords}" target="_blank" class="text-white">Ver Mapa</a></div>`;
+        document.getElementById('live-repas').innerHTML += `
+            <div id="gps-${chofer}" class="badge bg-primary p-2">
+                🛵 ${chofer}: <a href="https://www.google.com/maps?q=${coords}" target="_blank" class="text-white">VER MAPA</a>
+            </div>`;
     });
 
     function actualizar() {
         const h = document.getElementById('hist'); h.innerHTML = "";
-        let l=0, d=0, c=0;
+        let loc = 0, dom = 0, can = 0;
+
         data.forEach(p => {
-            const min = Math.round((Date.now() - p.id)/60000);
+            const min = p.horaFin ? Math.round((p.horaFin - p.id) / 60000) : '--';
+            
             if(p.status !== 'cancelado') {
-                if(p.presencial) l += parseFloat(p.total); else d += parseFloat(p.total);
-                h.innerHTML += `<tr><td>#${p.folio}</td><td>${p.chofer_nombre||'--'}</td><td>${min} min</td><td>$${p.total}</td></tr>`;
-            } else c++;
+                if(p.presencial) loc += parseFloat(p.total); else dom += parseFloat(p.total);
+            } else { can++; }
+            
+            h.innerHTML += `
+                <tr class="${p.status=='cancelado'?'table-danger':''}">
+                    <td>#${p.folio}</td>
+                    <td>${new Date(p.id).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</td>
+                    <td>${p.presencial?'LOCAL':'DOM'}</td>
+                    <td>${p.chofer_nombre || '--'}</td>
+                    <td class="fw-bold">${min} min</td>
+                    <td class="text-success fw-bold">$${p.total}</td>
+                    <td>${p.status.toUpperCase()}</td>
+                </tr>`;
         });
-        document.getElementById('v-loc').innerText = `$${l}`; document.getElementById('v-dom').innerText = `$${d}`; document.getElementById('v-can').innerText = c;
+
+        document.getElementById('v-loc').innerText = `$${loc}`;
+        document.getElementById('v-dom').innerText = `$${dom}`;
+        document.getElementById('v-can').innerText = can;
+        document.getElementById('v-total').innerText = `$${loc + dom}`;
     }
 
     function nuevoDia() {
-        if(prompt("CLAVE:") === "LEO2026") { localStorage.clear(); location.reload(); }
+        if(prompt("CLAVE DE GERENTE:") === "LEO2026") {
+            localStorage.clear();
+            location.reload();
+        }
     }
 </script>
 </body>
