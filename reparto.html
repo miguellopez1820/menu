@@ -2,82 +2,73 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reparto</title>
+    <title>Reparto | Leo</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
 </head>
 <body class="bg-light">
-    <div class="p-3 bg-primary text-white">
-        <select id="mi-nombre" class="form-select mb-2" onchange="cambiarChofer()">
-            <option value="">¿Quién eres?</option>
-            <option value="Juan">Juan</option>
-            <option value="Pedro">Pedro</option>
-        </select>
-        <div id="info-dinero" class="badge bg-dark w-100 p-2 fs-6">Bolsa: $0</div>
-        <button class="btn btn-sm btn-light w-100 mt-2" onclick="liquidar()">Entregué dinero en base</button>
+    <div id="login" class="p-5 text-center">
+        <h2 class="fw-bold mb-4">PERFIL REPARTIDOR</h2>
+        <button class="btn btn-primary btn-lg w-100 mb-3 py-3" onclick="entrar('Juan')">JUAN</button>
+        <button class="btn btn-primary btn-lg w-100 py-3" onclick="entrar('Pedro')">PEDRO</button>
     </div>
-    <div id="mis-pedidos" class="p-3"></div>
+
+    <div id="app" class="d-none">
+        <div id="bolsa-txt" class="p-3 bg-dark text-white text-center fw-bold h4">BOLSA: $400</div>
+        <div id="pedidos" class="p-3"></div>
+    </div>
 
 <script>
     const ably = new Ably.Realtime({ key: 'DTn3Xw.LRKcmg:kyc7qhpjvAETzWfzWTVNnLerapobqPaCivYdBVk97OA' });
     const canal = ably.channels.get('canal-operativo-menu');
-    let misRutas = JSON.parse(localStorage.getItem('p_repa')) || [];
-    let chofer = localStorage.getItem('ch_nom') || "";
-    let dinero = parseFloat(localStorage.getItem('ch_bolsa')) || 0;
+    let chofer = localStorage.getItem('ch_nom'), bolsa = parseFloat(localStorage.getItem('ch_bolsa')) || 400, rutas = JSON.parse(localStorage.getItem('ch_rutas')) || [];
 
     if(chofer) {
-        document.getElementById('mi-nombre').value = chofer;
-        actualizarBolsa();
-        misRutas.forEach(p => dibujar(p));
-        canal.subscribe('asignado-' + chofer, (m) => {
-            if(misRutas.find(x=>x.id==m.data.id)) return;
-            misRutas.push(m.data);
-            localStorage.setItem('p_repa', JSON.stringify(misRutas));
-            dibujar(m.data);
+        document.getElementById('login').classList.add('d-none');
+        document.getElementById('app').classList.remove('d-none');
+        updateBolsa();
+        rutas.forEach(p => dibujar(p));
+        
+        canal.subscribe('asignado-' + chofer, m => {
+            if(rutas.find(x=>x.id==m.data.id)) return;
+            rutas.push(m.data); localStorage.setItem('ch_rutas', JSON.stringify(rutas)); dibujar(m.data);
         });
+
+        canal.subscribe('cancelar-global', m => { 
+            document.getElementById('r-'+m.data.id)?.remove(); 
+            rutas = rutas.filter(x => x.id != m.data.id); localStorage.setItem('ch_rutas', JSON.stringify(rutas));
+        });
+
+        setInterval(() => {
+            navigator.geolocation.getCurrentPosition(p => {
+                canal.publish('posicion-repa', { chofer, coords: `${p.coords.latitude},${p.coords.longitude}` });
+            });
+        }, 30000);
     }
 
-    function cambiarChofer() { 
-        localStorage.setItem('ch_nom', document.getElementById('mi-nombre').value); 
-        location.reload(); 
-    }
-
-    function actualizarBolsa() {
-        const el = document.getElementById('info-dinero');
-        el.innerText = `Bolsa: $${dinero}`;
-        el.className = dinero >= 1500 ? "badge bg-danger w-100 p-2 fs-6" : "badge bg-dark w-100 p-2 fs-6";
-        canal.publish('reporte-bolsa', { chofer: chofer, total: dinero });
-    }
+    function entrar(n) { localStorage.setItem('ch_nom', n); location.reload(); }
 
     function dibujar(p) {
-        const div = document.createElement('div');
-        div.id = `r-${p.id}`;
-        div.className = "card p-3 mb-3 shadow-sm";
-        div.innerHTML = `
-            <h4>Folio #${p.folio}</h4>
-            <p><b>Cliente:</b> ${p.nombre}<br><b>Dir:</b> ${p.direccion}</p>
-            <h3 class="text-success">$${p.total}</h3>
-            <button class="btn btn-success w-100 py-3 fw-bold" onclick="entregado('${p.id}')">ENTREGADO ✅</button>`;
-        document.getElementById('mis-pedidos').prepend(div);
+        const div = document.createElement('div'); div.id = `r-${p.id}`; div.className = "card p-3 mb-3 shadow-sm";
+        const btnMaps = p.gps ? `<a href="https://www.google.com/maps?q=${p.gps}" target="_blank" class="btn btn-outline-primary w-100 mb-2">📍 RUTA MAPS</a>` : '';
+        div.innerHTML = `<h4>#${p.folio} - $${p.total}</h4><p>${p.direccion}</p>${btnMaps}<button class="btn btn-success w-100 py-3 fw-bold" onclick="entregar('${p.id}')">ENTREGADO ✅</button>`;
+        document.getElementById('pedidos').prepend(div);
     }
 
-    function entregado(id) {
-        const p = misRutas.find(x=>x.id==id);
-        dinero += parseFloat(p.total);
-        localStorage.setItem('ch_bolsa', dinero);
-        canal.publish('status-'+id, { estado: 'entregado' });
+    function entregar(id) {
+        const p = rutas.find(x=>x.id==id);
+        bolsa += parseFloat(p.total); localStorage.setItem('ch_bolsa', bolsa);
         canal.publish('venta-finalizada', p);
-        misRutas = misRutas.filter(x=>x.id!=id);
-        localStorage.setItem('p_repa', JSON.stringify(misRutas));
-        document.getElementById(`r-${id}`).remove();
-        actualizarBolsa();
+        canal.publish('status-'+id, { estado: 'entregado' });
+        rutas = rutas.filter(x=>x.id!=id); localStorage.setItem('ch_rutas', JSON.stringify(rutas));
+        document.getElementById('r-'+id).remove(); updateBolsa();
     }
 
-    function liquidar() {
-        if(confirm("¿Entregaste el efectivo?")) {
-            dinero = 0; localStorage.setItem('ch_bolsa', 0); actualizarBolsa();
-        }
+    function updateBolsa() {
+        const el = document.getElementById('bolsa-txt');
+        el.innerText = `BOLSA: $${bolsa.toFixed(2)}`;
+        el.className = bolsa >= 1500 ? "p-3 bg-danger text-white text-center fw-bold h4" : "p-3 bg-dark text-white text-center fw-bold h4";
+        canal.publish('reporte-bolsa', { chofer, total: bolsa });
     }
 </script>
 </body>
