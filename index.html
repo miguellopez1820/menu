@@ -7,46 +7,40 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
     <style>
-        body { background: #fdfdfd; font-family: 'Arial', sans-serif; padding-bottom: 120px; }
-        .btn-item { height: 110px; font-size: 1.6rem; font-weight: 800; border-radius: 25px; border: 4px solid #eee; background: white; width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 0 30px; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-        .btn-item:active { background: #e8f5e9; border-color: #2e7d32; transform: scale(0.96); }
-        .precio { background: #2e7d32; color: white; padding: 5px 15px; border-radius: 50px; font-size: 1.2rem; }
-        .btn-ws-help { position: fixed; bottom: 20px; right: 20px; background: #25d366; width: 70px; height: 70px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 5px 15px rgba(0,0,0,0.3); z-index: 1000; text-decoration: none; font-size: 35px; }
-        .cart-panel { position: fixed; bottom: 0; left: 0; width: 100%; background: white; padding: 20px; border-top: 5px solid #2e7d32; box-shadow: 0 -5px 20px rgba(0,0,0,0.1); }
+        body { background: #fdfdfd; font-family: 'Arial', sans-serif; }
+        .btn-item { height: 100px; font-size: 1.5rem; font-weight: 800; border-radius: 20px; border: 4px solid #eee; background: white; width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 0 25px; margin-bottom: 12px; }
+        .precio { background: #2e7d32; color: white; padding: 5px 15px; border-radius: 50px; }
+        .btn-ws-help { position: fixed; bottom: 20px; right: 20px; background: #25d366; width: 65px; height: 65px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 1000; text-decoration: none; font-size: 30px; }
     </style>
 </head>
 <body class="p-3">
-    <a href="https://wa.me/521234567890?text=Hola, tengo una duda" target="_blank" class="btn-ws-help">📱</a>
+    <a href="https://wa.me/521234567890" target="_blank" class="btn-ws-help">📱</a>
 
     <div id="pantalla-menu" style="max-width: 600px; margin: auto;">
         <div class="text-center mb-4">
-            <h1 class="fw-bold display-4">TAQUERÍA LEO 🌮</h1>
-            <div class="badge bg-danger fs-4 p-3 rounded-pill">🕒 Entrega estimada: 45 min</div>
+            <h1 class="fw-bold">TAQUERÍA LEO 🌮</h1>
+            <div class="badge bg-danger fs-5 p-2 rounded-pill">🕒 Tiempo: 45 min</div>
         </div>
 
-        <div id="menu-lista">
-            <button class="btn-item" onclick="add('Orden Tacos', 100)"><span>TACOS</span> <span class="precio">$100</span></button>
-            <button class="btn-item" onclick="add('Hamburguesa', 120)"><span>HAMBURGUESA</span> <span class="precio">$120</span></button>
-            <button class="btn-item" onclick="add('Alitas', 140)"><span>ALITAS</span> <span class="precio">$140</span></button>
-            <button class="btn-item" onclick="add('Papas', 70)"><span>PAPAS</span> <span class="precio">$70</span></button>
-        </div>
+        <button class="btn-item" onclick="add('Orden Tacos', 100)"><span>TACOS</span> <span class="precio">$100</span></button>
+        <button class="btn-item" onclick="add('Hamburguesa', 120)"><span>HAMBURGUESA</span> <span class="precio">$120</span></button>
+        <button class="btn-item" onclick="add('Alitas', 140)"><span>ALITAS</span> <span class="precio">$140</span></button>
 
-        <div class="cart-panel">
-            <input type="text" id="nom" class="form-control form-control-lg mb-2 border-dark" placeholder="ESCRIBE TU NOMBRE" style="height: 60px;">
+        <div class="card p-4 shadow-lg mt-4" style="border-radius: 25px; border: 3px solid #1a1a1a;">
+            <input type="text" id="nom" class="form-control form-control-lg mb-2" placeholder="TU NOMBRE">
             <div class="input-group mb-2">
-                <input type="text" id="dir" class="form-control form-control-lg border-dark" placeholder="DIRECCIÓN / REFERENCIAS">
+                <input type="text" id="dir" class="form-control" placeholder="DIRECCIÓN">
                 <button class="btn btn-dark" onclick="fijarGps()">📍 GPS</button>
             </div>
-            <div class="d-flex justify-content-between h2 fw-bold text-success mb-2"><span>TOTAL:</span><span id="tot-txt">$10</span></div>
-            <button class="btn btn-success w-100 py-3 fs-2 fw-bold rounded-pill shadow" onclick="pedir()">ENVIAR PEDIDO ✅</button>
+            <div class="d-flex justify-content-between h2 fw-bold text-success"><span>TOTAL:</span><span id="tot-txt">$10</span></div>
+            <button class="btn btn-success w-100 py-3 fs-2 fw-bold rounded-pill shadow" onclick="pedir()">PEDIR ✅</button>
         </div>
     </div>
 
     <div id="tracking" class="d-none text-center p-5 mt-5">
-        <h1 style="font-size: 6rem;">🛵</h1>
+        <h1 style="font-size: 5rem;">🛵</h1>
         <h2 id="f-display" class="fw-bold text-success display-3">#...</h2>
         <p class="h1" id="s-display">PREPARANDO...</p>
-        <p class="text-muted mt-5">Usa el botón flotante si necesitas ayuda.</p>
     </div>
 
 <script>
@@ -59,7 +53,7 @@
 
     function pedir() {
         const n = document.getElementById('nom').value, d = document.getElementById('dir').value;
-        if(!n || !d || sub == 0) return alert("Completa tus datos y pedido.");
+        if(!n || !d || sub == 0) return alert("Falta nombre o comida");
         const id = Date.now();
         canal.publish('nuevo-pedido', { id, nombre: n, direccion: d, gps, alimentos: items, snacks: "", total: sub+10, presencial: false }, () => {
             localStorage.setItem('sesion_leo', JSON.stringify({ id, time: Date.now() }));
@@ -71,9 +65,8 @@
     if(s && (Date.now() - s.time < 8*60*60*1000)) {
         document.getElementById('pantalla-menu').classList.add('d-none');
         document.getElementById('tracking').classList.remove('d-none');
-        canal.subscribe('folio-asignado', m => { if(m.data.id == s.id) document.getElementById('f-display').innerText = "Folio #" + m.data.folio; });
+        canal.subscribe('folio-asignado', m => { if(m.data.id == s.id) document.getElementById('f-display').innerText = "#" + m.data.folio; });
         canal.subscribe('status-'+s.id, m => { document.getElementById('s-display').innerText = m.data.estado.toUpperCase(); });
-        canal.subscribe('cancelar-global', m => { if(m.data.id == s.id) { localStorage.removeItem('sesion_leo'); location.reload(); } });
     }
 </script>
 </body>
