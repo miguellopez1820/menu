@@ -2,43 +2,68 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Reparto | Taquería Leo</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
+    <style>
+        body { background: #121212; color: white; font-family: 'Arial Black', sans-serif; }
+        .card-reparto { background: #222; border-radius: 30px; border-left: 15px solid #28a745; margin-bottom: 30px; box-shadow: 0 10px 20px rgba(0,0,0,0.5); }
+        .folio-big { font-size: 5rem; font-weight: 900; color: #ffc107; line-height: 1; }
+        .monto-big { font-size: 4rem; font-weight: 900; color: #28a745; }
+        .dato-cliente { font-size: 2.2rem; line-height: 1.1; margin-top: 15px; }
+        .btn-gps { font-size: 1.8rem; padding: 20px; border-radius: 20px; background: #007bff; border: none; color: white; text-decoration: none; display: block; text-align: center; }
+        .btn-entregado { font-size: 2.5rem; padding: 30px; border-radius: 25px; text-transform: uppercase; margin-top: 20px; }
+        .text-etiqueta { font-size: 1.2rem; color: #aaa; text-transform: uppercase; }
+    </style>
 </head>
-<body class="bg-light">
-    <div id="login" class="p-5 text-center">
-        <h2 class="fw-bold mb-4">PERFIL REPARTIDOR</h2>
-        <button class="btn btn-primary btn-lg w-100 mb-3 py-3" onclick="entrar('Juan')">JUAN</button>
-        <button class="btn btn-primary btn-lg w-100 py-3" onclick="entrar('Pedro')">PEDRO</button>
+<body class="p-2">
+    <div id="login" class="p-5 text-center mt-5">
+        <h1 class="display-1 fw-bold mb-5">REPARTO</h1>
+        <button class="btn btn-primary w-100 mb-4 py-4 fs-1 rounded-pill" onclick="entrar('Juan')">JUAN</button>
+        <button class="btn btn-primary w-100 py-4 fs-1 rounded-pill" onclick="entrar('Pedro')">PEDRO</button>
     </div>
 
     <div id="app" class="d-none">
-        <div id="bolsa-txt" class="p-3 bg-dark text-white text-center fw-bold h4">BOLSA: $400</div>
-        <div id="pedidos" class="p-3"></div>
+        <div class="d-flex justify-content-between align-items-center p-3 mb-3 bg-warning text-dark rounded-4">
+            <span class="h1 fw-bold m-0" id="ch-nombre">---</span>
+            <span class="h1 fw-bold m-0" id="status-bolsa">$400</span>
+        </div>
+        <div id="pedidos"></div>
     </div>
 
 <script>
     const ably = new Ably.Realtime({ key: 'DTn3Xw.LRKcmg:kyc7qhpjvAETzWfzWTVNnLerapobqPaCivYdBVk97OA' });
     const canal = ably.channels.get('canal-operativo-menu');
-    let chofer = localStorage.getItem('ch_nom'), bolsa = parseFloat(localStorage.getItem('ch_bolsa')) || 400, rutas = JSON.parse(localStorage.getItem('ch_rutas')) || [];
+    
+    let chofer = localStorage.getItem('ch_nom');
+    let bolsa = parseFloat(localStorage.getItem('ch_bolsa')) || 400;
+    let rutas = JSON.parse(localStorage.getItem('ch_rutas')) || [];
 
     if(chofer) {
         document.getElementById('login').classList.add('d-none');
         document.getElementById('app').classList.remove('d-none');
+        document.getElementById('ch-nombre').innerText = chofer.toUpperCase();
         updateBolsa();
         rutas.forEach(p => dibujar(p));
         
+        // RECIBIR NUEVO PEDIDO ASIGNADO
         canal.subscribe('asignado-' + chofer, m => {
-            if(rutas.find(x=>x.id==m.data.id)) return;
-            rutas.push(m.data); localStorage.setItem('ch_rutas', JSON.stringify(rutas)); dibujar(m.data);
+            if(rutas.find(x => x.id == m.data.id)) return;
+            rutas.push(m.data);
+            localStorage.setItem('ch_rutas', JSON.stringify(rutas));
+            dibujar(m.data);
+            // Sonido opcional aquí
         });
 
-        canal.subscribe('cancelar-global', m => { 
-            document.getElementById('r-'+m.data.id)?.remove(); 
-            rutas = rutas.filter(x => x.id != m.data.id); localStorage.setItem('ch_rutas', JSON.stringify(rutas));
+        // ESCUCHAR SI GERENTE CANCELA
+        canal.subscribe('cancelar-global', m => {
+            document.getElementById('r-' + m.data.id)?.remove();
+            rutas = rutas.filter(x => x.id != m.data.id);
+            localStorage.setItem('ch_rutas', JSON.stringify(rutas));
         });
 
+        // ENVIAR GPS AL GERENTE CADA 30 SEGUNDOS
         setInterval(() => {
             navigator.geolocation.getCurrentPosition(p => {
                 canal.publish('posicion-repa', { chofer, coords: `${p.coords.latitude},${p.coords.longitude}` });
@@ -46,17 +71,38 @@
         }, 30000);
     }
 
-    function entrar(n) { localStorage.setItem('ch_nom', n); location.reload(); }
+    function entrar(n) {
+        localStorage.setItem('ch_nom', n);
+        location.reload();
+    }
 
     function dibujar(p) {
-        const div = document.createElement('div'); div.id = `r-${p.id}`; div.className = "card p-3 mb-3 shadow-sm";
-        const btnMaps = p.gps ? `<a href="https://www.google.com/maps?q=${p.gps}" target="_blank" class="btn btn-outline-primary w-100 mb-2 fw-bold">📍 ABRIR EN GOOGLE MAPS</a>` : '';
-        div.innerHTML = `<h4>#${p.folio} - $${p.total}</h4><p>${p.direccion}</p>${btnMaps}<button class="btn btn-success w-100 py-3 fw-bold" onclick="entregar('${p.id}')">ENTREGADO ✅</button>`;
+        const div = document.createElement('div');
+        div.id = `r-${p.id}`;
+        div.className = "card-reparto p-4";
+        
+        // Si el pedido tiene GPS, creamos la URL de Google Maps
+        // p.gps ya viene con lat,lng desde la web del cliente
+        const urlMaps = p.gps ? `https://www.google.com/maps/search/?api=1&query=${p.gps}` : null;
+        const btnGps = urlMaps ? `<a href="${urlMaps}" target="_blank" class="btn-gps mb-3">📍 NAVEGAR A CLIENTE</a>` : '<div class="alert alert-danger fs-4 text-center">SIN GPS (DIR. MANUAL)</div>';
+
+        div.innerHTML = `
+            <div class="d-flex justify-content-between align-items-center border-bottom border-secondary pb-3 mb-3">
+                <span class="folio-big">#${p.folio}</span>
+                <span class="monto-big">$${p.total}</span>
+            </div>
+            <div class="dato-cliente mb-4">
+                <span class="text-etiqueta">Cliente:</span><br> ${p.nombre}<br><br>
+                <span class="text-etiqueta">Dirección:</span><br> ${p.direccion}
+            </div>
+            ${btnGps}
+            <button class="btn btn-success btn-entregado w-100 fw-bold" onclick="entregar('${p.id}')">ENTREGADO ✅</button>
+        `;
         document.getElementById('pedidos').prepend(div);
     }
 
     function entregar(id) {
-        const p = rutas.find(x=>x.id==id);
+        const p = rutas.find(x => x.id == id);
         p.horaFin = Date.now();
         p.status = 'entregado';
         p.chofer_nombre = chofer;
@@ -64,20 +110,24 @@
         bolsa += parseFloat(p.total);
         localStorage.setItem('ch_bolsa', bolsa);
         
+        // Avisar a Gerente, Despacho y Cliente
         canal.publish('registro-gerente', p);
-        canal.publish('status-'+id, { estado: 'entregado' });
+        canal.publish('status-' + id, { estado: 'entregado' });
         
-        rutas = rutas.filter(x=>x.id!=id); 
+        // Limpiar de pantalla
+        rutas = rutas.filter(x => x.id != id);
         localStorage.setItem('ch_rutas', JSON.stringify(rutas));
-        document.getElementById('r-'+id).remove(); 
+        document.getElementById('r-' + id).remove();
         updateBolsa();
     }
 
     function updateBolsa() {
-        const el = document.getElementById('bolsa-txt');
-        el.innerText = `BOLSA: $${bolsa.toFixed(2)}`;
-        el.className = bolsa >= 1500 ? "p-3 bg-danger text-white text-center fw-bold h4" : "p-3 bg-dark text-white text-center fw-bold h4";
-        canal.publish('reporte-bolsa', { chofer, total: bolsa });
+        const el = document.getElementById('status-bolsa');
+        el.innerText = `$${bolsa.toFixed(0)}`;
+        if(bolsa >= 1500) {
+            el.className = "h1 fw-bold m-0 p-3 bg-danger text-white rounded-4 animate__animated animate__flash infinite";
+            alert("🚨 LÍMITE DE DINERO EXCEDIDO. REGRESA A LA TAQUERÍA.");
+        }
     }
 </script>
 </body>
