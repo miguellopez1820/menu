@@ -2,94 +2,62 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Gerencia Pro</title>
+    <title>Gerencia | Leo</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
-    <style>body{background:#f0f2f5;}.monitor-repa{background:#000;color:#fff;border-radius:15px;padding:20px;}</style>
 </head>
-<body class="p-4">
-    <div id="alertas-dinero" class="mb-3"></div>
-    <div class="row mb-4">
-        <div class="col-md-4">
-            <div class="card p-4 text-center bg-white border-0 shadow-sm">
-                <small class="fw-bold opacity-50">PROMEDIO REAL HOY</small>
-                <h1 id="prom-hoy" class="fw-bold text-primary">0 min</h1>
-                <small id="cnt-pedidos" class="text-muted">0 entregas</small>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card p-4 text-center bg-dark text-white border-0 shadow-sm">
-                <small class="fw-bold opacity-50">VENTA TOTAL</small>
-                <h1 id="venta-g" class="fw-bold text-success">$0.00</h1>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="monitor-repa shadow">
-                <h6 class="text-warning fw-bold">📍 MONITOR REPARTIDORES</h6>
-                <div id="tr-Juan" class="small mt-2">JUAN: <span class="badge bg-secondary">Offline</span></div>
-                <div id="tr-Pedro" class="small mt-2">PEDRO: <span class="badge bg-secondary">Offline</span></div>
-            </div>
-        </div>
+<body class="bg-dark text-white p-4">
+    <div class="d-flex justify-content-between mb-4">
+        <h2>📊 CONTROL GERENCIAL</h2>
+        <button class="btn btn-danger" onclick="nuevoDia()">🌞 CORTE Y NUEVO DÍA</button>
     </div>
-    <div class="card p-4 border-0 shadow-sm">
-        <h5 class="fw-bold mb-3">HISTORIAL DE OPERACIÓN</h5>
-        <table class="table small">
-            <thead><tr><th>Folio</th><th>Metodo</th><th>Tiempo</th><th>Repartidor</th><th>Monto</th></tr></thead>
-            <tbody id="hist-tabla"></tbody>
+
+    <div class="row g-3 mb-4 text-dark text-center">
+        <div class="col-md-4"><div class="card p-3"><h6>Ventas Local</h6><h3 id="v-loc">$0</h3></div></div>
+        <div class="col-md-4"><div class="card p-3"><h6>Ventas Dom</h6><h3 id="v-dom">$0</h3></div></div>
+        <div class="col-md-4"><div class="card p-3 bg-warning"><h6>Cancelaciones</h6><h3 id="v-can">0</h3></div></div>
+    </div>
+
+    <div class="card p-3 text-dark">
+        <h5>📍 Rastreo y Eficiencia</h5>
+        <div id="live-repas" class="mb-3"></div>
+        <table class="table">
+            <thead><tr><th>Folio</th><th>Chofer</th><th>Tiempo</th><th>Total</th></tr></thead>
+            <tbody id="hist"></tbody>
         </table>
     </div>
-    <audio id="snd" src="https://assets.mixkit.co/active_storage/sfx/951/951-preview.mp3"></audio>
 
 <script>
-    const ably = new Ably.Realtime('DTn3Xw.LRKcmg:kyc7qhpjvAETzWfzWTVNnLerapobqPaCivYdBVk97OA');
-    const canal = ably.channels.get('pedidos-dash');
+    const ably = new Ably.Realtime({ key: 'DTn3Xw.LRKcmg:kyc7qhpjvAETzWfzWTVNnLerapobqPaCivYdBVk97OA' });
+    const canal = ably.channels.get('canal-operativo-menu');
+    let data = JSON.parse(localStorage.getItem('g_data')) || [];
 
-    let totalV = parseFloat(localStorage.getItem('g_total')) || 0;
-    let minT = parseFloat(localStorage.getItem('g_minutos')) || 0;
-    let cntP = parseInt(localStorage.getItem('g_conteo')) || 0;
-    let histHTML = localStorage.getItem('g_hist_html') || "";
+    actualizar();
 
-    actualizarVista();
-
-    canal.subscribe('para-gerente', (msg) => {
-        const p = msg.data; const t = Math.floor((Date.now() - p.creado) / 60000);
-        totalV += parseFloat(p.total); minT += t; cntP += 1;
-        const fila = `<tr><td>#${p.folio}</td><td>${p.pago}</td><td>${t} min</td><td>${p.repartidor}</td><td class="fw-bold text-success">$${p.total}</td></tr>`;
-        histHTML = fila + histHTML;
-        localStorage.setItem('g_total', totalV); localStorage.setItem('g_minutos', minT);
-        localStorage.setItem('g_conteo', cntP); localStorage.setItem('g_hist_html', histHTML);
-        actualizarVista();
-        calcularSaturacion();
+    canal.subscribe('registro-gerente', m => { data.push(m.data); localStorage.setItem('g_data', JSON.stringify(data)); actualizar(); });
+    
+    canal.subscribe('posicion-repa', m => {
+        const { chofer, coords } = m.data;
+        document.getElementById(`gps-${chofer}`)?.remove();
+        document.getElementById('live-repas').innerHTML += `<div id="gps-${chofer}" class="badge bg-primary m-1">📍 ${chofer}: <a href="https://www.google.com/maps?q=${coords}" target="_blank" class="text-white">Ver Mapa</a></div>`;
     });
 
-    canal.subscribe('rastreo-repa', (msg) => {
-        const d = msg.data; const el = document.getElementById(`tr-${d.repartidor}`);
-        if(el) el.innerHTML = `${d.repartidor}: <span class="badge ${d.estado==='Entregando'?'bg-primary':'bg-success'}">${d.estado} #${d.folio}</span>`;
-    });
-
-    canal.subscribe('alerta-recaudacion', (m) => {
-        document.getElementById('snd').play();
-        const div = document.createElement('div'); div.className = "alert alert-danger fw-bold shadow-sm";
-        div.innerHTML = `💰 CORTE REQUERIDO: ${m.data.repartidor} tiene $${m.data.total}. <button onclick="this.parentElement.remove()" class="btn btn-sm btn-dark ms-3">ENTERADO</button>`;
-        document.getElementById('alertas-dinero').prepend(div);
-    });
-
-    function actualizarVista() {
-        document.getElementById('venta-g').innerText = `$${totalV}.00`;
-        document.getElementById('hist-tabla').innerHTML = histHTML;
-        if(cntP > 0) {
-            document.getElementById('prom-hoy').innerText = `${Math.round(minT/cntP)} min`;
-            document.getElementById('cnt-pedidos').innerText = `${cntP} entregas hoy`;
-        }
+    function actualizar() {
+        const h = document.getElementById('hist'); h.innerHTML = "";
+        let l=0, d=0, c=0;
+        data.forEach(p => {
+            const min = Math.round((Date.now() - p.id)/60000);
+            if(p.status !== 'cancelado') {
+                if(p.presencial) l += parseFloat(p.total); else d += parseFloat(p.total);
+                h.innerHTML += `<tr><td>#${p.folio}</td><td>${p.chofer_nombre||'--'}</td><td>${min} min</td><td>$${p.total}</td></tr>`;
+            } else c++;
+        });
+        document.getElementById('v-loc').innerText = `$${l}`; document.getElementById('v-dom').innerText = `$${d}`; document.getElementById('v-can').innerText = c;
     }
 
-    function calcularSaturacion() {
-        let base = 45;
-        const prom = cntP > 0 ? (minT/cntP) : 45;
-        let tFinal = Math.max(base, Math.round(prom));
-        canal.publish('ajuste-tiempo', { min: tFinal, max: tFinal + 10 });
+    function nuevoDia() {
+        if(prompt("CLAVE:") === "LEO2026") { localStorage.clear(); location.reload(); }
     }
-    setInterval(calcularSaturacion, 60000);
 </script>
 </body>
 </html>
