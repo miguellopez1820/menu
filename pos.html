@@ -2,81 +2,169 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>POS Maestro</title>
+    <title>POS | Taquería Leo</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
     <style>
-        body { background: #121212; color: white; display: flex; height: 100vh; overflow: hidden; }
-        .menu-area { flex: 1; padding: 20px; overflow-y: auto; border-right: 1px solid #333; }
-        .ticket-area { width: 350px; background: #1e1e1e; padding: 20px; }
-        .btn-alim { background: #441111; border: 2px solid #ff4444; color: white; height: 70px; margin-bottom: 8px; border-radius: 10px; font-weight: bold; }
-        .btn-snack { background: #443311; border: 2px solid #ffcc44; color: white; height: 70px; margin-bottom: 8px; border-radius: 10px; font-weight: bold; }
+        :root { --leo-orange: #FF6600; --leo-green: #28a745; --leo-dark: #1a1a1a; }
+        body { background: var(--leo-dark); color: white; height: 100vh; display: flex; overflow: hidden; font-family: 'Arial Black', sans-serif; }
+        
+        /* COLUMNA MENÚ */
+        .menu-col { flex: 1; padding: 20px; overflow-y: auto; border-right: 5px solid #333; }
+        .seccion-tit { color: var(--leo-orange); border-bottom: 4px solid var(--leo-orange); margin-bottom: 20px; padding-bottom: 5px; font-size: 1.8rem; }
+        
+        .btn-item { height: 95px; font-size: 1.3rem; font-weight: 900; border-radius: 20px; border: 4px solid transparent; margin-bottom: 10px; transition: 0.2s; }
+        .btn-alim { background: #450a0a; border-color: #dc2626; color: white; }
+        .btn-snack { background: #1e3a1e; border-color: var(--leo-green); color: white; }
+        .btn-item:active { transform: scale(0.95); opacity: 0.8; }
+
+        /* COLUMNA TICKET */
+        .ticket-col { width: 450px; background: white; color: black; padding: 20px; display: flex; flex-direction: column; box-shadow: -10px 0 30px rgba(0,0,0,0.5); }
+        .item-row { background: #f8f9fa; border-radius: 12px; padding: 10px; margin-bottom: 8px; border-left: 6px solid var(--leo-orange); display: flex; justify-content: space-between; align-items: center; }
+        
+        .input-pos { height: 60px; font-size: 1.4rem; font-weight: bold; border: 2px solid #ccc; border-radius: 12px; }
+        .btn-cobrar { background: var(--leo-green); color: white; border: none; font-size: 2.2rem; padding: 20px; border-radius: 25px; font-weight: 900; box-shadow: 0 8px 0 #1e7e34; }
+        .btn-cobrar:active { transform: translateY(4px); box-shadow: 0 4px 0 #1e7e34; }
+
+        .overlay-folio { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); display:none; flex-direction:column; align-items:center; justify-content:center; z-index:9999; }
     </style>
 </head>
 <body>
-    <div class="menu-area">
-        <h5 class="text-danger">ALIMENTOS</h5>
-        <div class="row g-2" id="grid-alim"></div>
-        <h5 class="text-warning mt-4">SNACKS</h5>
-        <div class="row g-2" id="grid-snack"></div>
+
+    <div class="menu-col">
+        <h2 class="seccion-tit">🍔 CENAS (COCINA 1)</h2>
+        <div class="row g-2 mb-5" id="btns-alim"></div>
+
+        <h2 class="seccion-tit">🍟 SNACKS (COCINA 2)</h2>
+        <div class="row g-2" id="btns-snack"></div>
     </div>
-    <div class="ticket-area">
-        <h4>TICKET</h4>
-        <div id="lista-ticket" class="flex-grow-1 overflow-auto" style="min-height: 50vh;"></div>
-        <input type="text" id="cliente" class="form-control mb-2 bg-dark text-white border-secondary" placeholder="Mesa/Nombre">
-        <h2 class="text-success fw-bold" id="total-val">$0</h2>
-        <button id="btn-env" class="btn btn-success w-100 py-3 fw-bold" onclick="mandar()">ENVIAR 🔥</button>
+
+    <div class="ticket-col">
+        <div class="text-center mb-3">
+            <h3 class="fw-bold m-0" style="color: var(--leo-orange)">CAJA REGISTRADORA</h3>
+            <div class="badge bg-dark">TAQUERÍA LEO</div>
+        </div>
+
+        <div id="lista-ticket" class="flex-grow-1 overflow-auto">
+            </div>
+
+        <div class="pt-3 border-top">
+            <input type="text" id="cliente" class="form-control input-pos mb-2" placeholder="NOMBRE O MESA">
+            <textarea id="notas-pos" class="form-control mb-2" placeholder="NOTAS: Sin cebolla, etc." style="font-weight:bold;"></textarea>
+            
+            <div class="form-check form-switch mb-2">
+                <input class="form-check-input" type="checkbox" id="esParaLlevar" onchange="render()">
+                <label class="form-check-label fw-bold text-danger fs-5">Para Llevar (+$10)</label>
+            </div>
+
+            <select id="metodo-pago" class="form-select input-pos mb-3">
+                <option value="Efectivo">PAGO: EFECTIVO 💵</option>
+                <option value="Tarjeta">PAGO: TARJETA 💳</option>
+            </select>
+
+            <div class="d-flex justify-content-between h1 fw-bold text-success mb-3">
+                <span>TOTAL:</span><span id="total-txt">$0</span>
+            </div>
+
+            <button class="btn-cobrar w-100" onclick="enviarPedido()">COBRAR Y ENVIAR 🔥</button>
+            <button class="btn btn-outline-secondary w-100 mt-2 fw-bold" onclick="limpiar()">BORRAR TODO</button>
+        </div>
     </div>
-    <div id="overlay" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:9999;">
-        <h1 style="font-size: 8rem;" class="text-success fw-bold" id="folio-num">--</h1>
-        <button class="btn btn-light px-5 py-2" onclick="cerrar()">CONTINUAR</button>
+
+    <div id="overlay-folio" class="overlay-folio text-center">
+        <h2 class="text-white">FOLIO ASIGNADO</h2>
+        <div id="folio-grande" style="font-size: 12rem; color: var(--leo-orange); font-weight: 900;">--</div>
+        <button class="btn btn-light btn-lg px-5 py-3 fs-2 fw-bold rounded-pill" onclick="cerrar()">SIGUIENTE CLIENTE</button>
     </div>
 
 <script>
-    const ably = new Ably.Realtime({ key: 'DTn3Xw.LRKcmg:kyc7qhpjvAETzWfzWTVNnLerapobqPaCivYdBVk97OA' });
+    const ably = new Ably.Realtime({ key: 'YOUR_ABLY_KEY' });
     const canal = ably.channels.get('canal-operativo-menu');
-    const menu = [
-        {id:"h1", nom:"Hamburguesa", pre:135, area:"Alimentos"},
-        {id:"a1", nom:"Alitas", pre:160, area:"Snacks"},
-        {id:"b1", nom:"Bionico", pre:65, area:"Snacks"}
+
+    const productos = [
+        { id: "h1", nom: "Orden Tacos", pre: 100, area: "Alimentos" },
+        { id: "h2", nom: "Hamburguesa", pre: 120, area: "Alimentos" },
+        { id: "s1", nom: "Alitas BBQ", pre: 140, area: "Snacks" },
+        { id: "s2", nom: "Papas Gajo", pre: 70, area: "Snacks" }
     ];
-    let cart = []; let total = 0; let ultimoId = 0;
 
-    menu.filter(x=>x.area=="Alimentos").forEach(p => {
-        document.getElementById('grid-alim').innerHTML += `<div class="col-6"><button class="btn btn-alim w-100" onclick="add('${p.id}')">${p.nom}</button></div>`;
-    });
-    menu.filter(x=>x.area=="Snacks").forEach(p => {
-        document.getElementById('grid-snack').innerHTML += `<div class="col-6"><button class="btn btn-snack w-100" onclick="add('${p.id}')">${p.nom}</button></div>`;
+    let carrito = []; let total = 0; let ultimoPedidoId = 0;
+
+    // Generar botones de menú
+    productos.forEach(p => {
+        const target = p.area === "Alimentos" ? 'btns-alim' : 'btns-snack';
+        const clase = p.area === "Alimentos" ? 'btn-alim' : 'btn-snack';
+        document.getElementById(target).innerHTML += `
+            <div class="col-6 col-md-4">
+                <button class="btn-item ${clase} w-100" onclick="add('${p.id}')">
+                    ${p.nom.toUpperCase()}<br>$${p.pre}
+                </button>
+            </div>`;
     });
 
-    function add(id) { const p = menu.find(x=>x.id==id); cart.push(p); render(); }
+    function add(id) {
+        carrito.push(productos.find(x => x.id === id));
+        render();
+    }
+
     function render() {
-        const d = document.getElementById('lista-ticket'); d.innerHTML = ""; total = 0;
-        cart.forEach((p,i) => { total+=p.pre; d.innerHTML+=`<div class="p-2 border-bottom border-secondary d-flex justify-content-between"><span>${p.nom}</span><b onclick="cart.splice(${i},1);render()" style="cursor:pointer">✕</b></div>`; });
-        document.getElementById('total-val').innerText = `$${total}`;
+        const l = document.getElementById('lista-ticket');
+        l.innerHTML = ""; total = 0;
+        carrito.forEach((p, i) => {
+            total += p.pre;
+            l.innerHTML += `
+                <div class="item-row">
+                    <span class="fs-5 fw-bold">${p.nom}</span>
+                    <span class="badge bg-danger p-2" onclick="carrito.splice(${i},1);render()" style="cursor:pointer">✕</span>
+                </div>`;
+        });
+        
+        if(document.getElementById('esParaLlevar').checked) total += 10;
+        document.getElementById('total-txt').innerText = `$${total}`;
     }
 
-    function mandar() {
-        if(!document.getElementById('cliente').value || cart.length==0) return alert("Faltan datos");
-        ultimoId = Date.now();
-        let al="", sn="";
-        cart.forEach(p=>{ if(p.area=="Alimentos") al+=`1x ${p.nom}\n`; else sn+=`1x ${p.nom}\n`; });
-        canal.publish('nuevo-pedido', { id: ultimoId, nombre: document.getElementById('cliente').value, alimentos: al, snacks: sn, total: total, presencial: true });
-        document.getElementById('btn-env').innerText = "ESPERANDO FOLIO...";
+    function enviarPedido() {
+        const cli = document.getElementById('cliente').value;
+        if(!cli || carrito.length === 0) return alert("¡Atención! Falta nombre del cliente o productos.");
+
+        let al = ""; let sn = "";
+        carrito.forEach(p => {
+            if(p.area === "Alimentos") al += `• 1x ${p.nom}\n`;
+            else sn += `• 1x ${p.nom}\n`;
+        });
+
+        ultimoPedidoId = Date.now();
+        const data = {
+            id: ultimoPedidoId,
+            nombre: cli,
+            alimentos: al,
+            snacks: sn,
+            notas: document.getElementById('notas-pos').value,
+            total: total,
+            pago: document.getElementById('metodo-pago').value,
+            presencial: !document.getElementById('esParaLlevar').checked,
+            direccion: document.getElementById('esParaLlevar').checked ? "PARA LLEVAR" : "LOCAL"
+        };
+
+        canal.publish('nuevo-pedido', data);
     }
 
+    // Escuchar el Folio que manda el Despacho
     canal.subscribe('folio-asignado', (m) => {
-        if(m.data.id == ultimoId) {
-            document.getElementById('folio-num').innerText = m.data.folio;
-            document.getElementById('overlay').style.display = 'flex';
+        if(m.data.id == ultimoPedidoId) {
+            document.getElementById('folio-grande').innerText = m.data.folio;
+            document.getElementById('overlay-folio').style.display = 'flex';
         }
     });
 
     function cerrar() {
-        document.getElementById('overlay').style.display = 'none';
-        document.getElementById('btn-env').innerText = "ENVIAR 🔥";
-        document.getElementById('cliente').value = ""; cart = []; render();
+        document.getElementById('overlay-folio').style.display = 'none';
+        document.getElementById('cliente').value = "";
+        document.getElementById('notas-pos').value = "";
+        carrito = []; render();
     }
+
+    function limpiar() { if(confirm("¿Borrar todo el ticket?")) { carrito = []; render(); } }
 </script>
 </body>
 </html>
